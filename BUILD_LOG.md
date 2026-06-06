@@ -2,6 +2,8 @@
 
 This is the short version of what I actually built and what broke while wiring TrustGate together.
 
+I am keeping this log public so the technical choices, failures, and fixes are reproducible from the repo instead of hidden behind the final demo.
+
 ## What I Built
 
 I built TrustGate as a Cloud Run API plus a small React dashboard. The core endpoint is:
