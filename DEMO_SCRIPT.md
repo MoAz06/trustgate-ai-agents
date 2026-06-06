@@ -2,6 +2,8 @@
 
 # Three-Minute Demo Script
 
+This is the script I used to record the demo. I am keeping it public so judges and other builders can reproduce the flow.
+
 Target length: 2:45 to 3:00. Keep it in English or add English subtitles.
 
 ## 0:00-0:20 - Problem
