@@ -4,6 +4,8 @@ TrustGate is the small gate I built between a Gemini agent and a refund action. 
 
 This repo is intentionally scoped like a hackathon build, not a pretend production platform. The part I care about proving is the loop:
 
+I am keeping the build log, demo script, and setup notes public so judges and other builders can reproduce the flow instead of only watching the video.
+
 ```text
 Gemini / Vertex AI function call
 -> proposeTrustGateAction
