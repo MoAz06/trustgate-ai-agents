@@ -1,0 +1,147 @@
+openapi: 3.0.3
+info:
+  title: TrustGate Action Proposal Tool
+  version: 0.1.0
+  description: Single-operation tool spec for Gemini/Agent Builder imports when available. The agent proposes a business action; TrustGate returns ALLOW, APPROVAL_REQUIRED, or BLOCK with evidence.
+servers:
+  - url: https://trustgate-24801890031.us-central1.run.app
+paths:
+  /api/actions/propose:
+    post:
+      operationId: proposeTrustGateAction
+      summary: Ask TrustGate to authorize a proposed agent action
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - action_type
+                - customer_id
+                - amount
+                - reason
+              properties:
+                agent_id:
+                  type: string
+                action_type:
+                  type: string
+                  enum:
+                    - approve_refund
+                customer_id:
+                  type: string
+                amount:
+                  type: number
+                reason:
+                  type: string
+                customer_tier:
+                  type: string
+      responses:
+        "200":
+          description: TrustGate decision receipt
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  decision_id:
+                    type: string
+                  decision:
+                    type: string
+                    enum:
+                      - ALLOW
+                      - APPROVAL_REQUIRED
+                      - BLOCK
+                  risk_score:
+                    type: integer
+                  risk_breakdown:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        rule:
+                          type: string
+                        points:
+                          type: integer
+                  explanation:
+                    type: string
+                  policy_version:
+                    type: string
+                  contract_version:
+                    type: string
+                  violations:
+                    type: array
+                    items:
+                      type: string
+                  approval_applied:
+                    type: boolean
+                  evidence:
+                    type: object
+                    properties:
+                      fivetran:
+                        type: object
+                        properties:
+                          source:
+                            type: string
+                          connection_id:
+                            type: string
+                          connection_id_source:
+                            type: string
+                          service:
+                            type: string
+                          setup_state:
+                            type: string
+                          sync_state_summary:
+                            type: string
+                          schema_config_hash:
+                            type: string
+                          schema_change_detected:
+                            type: boolean
+                      bigquery:
+                        type: object
+                        properties:
+                          source:
+                            type: string
+                          query_id:
+                            type: string
+                          table:
+                            type: string
+                          customer_id:
+                            type: string
+                          customer_tier:
+                            type: string
+                          open_ticket_count:
+                            type: integer
+                          last_order_status:
+                            type: string
+                          refund_amount:
+                            type: number
+                          reason:
+                            type: string
+                          demo_note:
+                            type: string
+                          total_rows:
+                            type: integer
+                          selected_by:
+                            type: string
+                          auth_source:
+                            type: string
+                          observed_enum_values:
+                            type: array
+                            items:
+                              type: string
+                          available_columns:
+                            type: array
+                            items:
+                              type: string
+                          mapping_warning:
+                            type: string
+                      contract:
+                        type: object
+                        properties:
+                          contract_id:
+                            type: string
+                          observed_customer_tier:
+                            type: string
+                          amount:
+                            type: number

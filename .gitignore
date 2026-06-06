@@ -1,0 +1,17 @@
+.env
+*.log
+node_modules/
+outputs/
+npm-debug.log*
+.DS_Store
+__pycache__/
+*.pyc
+.env.local
+.env.*.local
+*.pem
+*.key
+service-account*.json
+*-credentials.json
+
+# Internal planning note; keep public repo focused on build proof.
+TrustGate_Hackathon_Strategy.txt

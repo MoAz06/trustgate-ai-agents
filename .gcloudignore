@@ -1,0 +1,10 @@
+.env
+.git/
+.gitignore
+node_modules/
+outputs/
+scripts/build-demo-sheet.mjs
+__pycache__/
+*.pyc
+*.log
+TrustGate_Hackathon_Strategy.txt
