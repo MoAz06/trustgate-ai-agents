@@ -357,9 +357,16 @@
       ),
       e("div", { className: "metric" },
         e("div", { className: "label" }, "Gemini Final Answer"),
-        e("p", { className: "muted", style: { marginBottom: 0 } }, agentRun.final_answer || "Gemini returned no text.")
+        e("p", { className: "agent-answer" }, cleanAgentAnswer(agentRun.final_answer) || "Gemini returned no text.")
       )
     );
+  }
+
+  function cleanAgentAnswer(answer) {
+    return String(answer || "")
+      .replace(/\*\*/g, "")
+      .replace(/`/g, "")
+      .trim();
   }
 
   function Metric({ label, value }) {
