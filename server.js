@@ -668,7 +668,19 @@ After TrustGate responds:
 - If decision is APPROVAL_REQUIRED, explain that human approval is required and cite the risk breakdown.
 - If decision is BLOCK, explain that the action is blocked because the data supply-chain evidence is not trusted.
 
-Always mention the Fivetran evidence source and BigQuery evidence source from the receipt. Do not invent policy decisions. TrustGate decides; you explain.`;
+Always mention the Fivetran evidence source and BigQuery evidence source from the receipt. Do not invent policy decisions. TrustGate decides; you explain.
+
+Format the final answer as plain text for a dashboard, not Markdown.
+Do not use bold markers, backticks, tables, or long paragraphs.
+Keep it under 90 words.
+Use this shape:
+TrustGate allowed the refund.
+Decision: ALLOW
+Customer: C-1042
+Amount: $75
+Why: customer_tier=premium matches contract v1, and $75 is within the automatic refund policy.
+Evidence: Fivetran REST live on fulfill_pageant; BigQuery live on trustgate-hackathon.trustgate_demo.customers.
+Receipt: dec_xxx`;
 
 function vertexConfig() {
   return {
