@@ -58,11 +58,12 @@ Without Fivetran credentials, the app uses clearly labeled demo evidence. With c
 Small reliability endpoints:
 
 ```bash
-curl http://localhost:8080/healthz
+curl http://localhost:8080/health
+curl http://localhost:8080/api/healthz
 curl http://localhost:8080/readyz
 ```
 
-`/readyz` reports configuration status by env var name only. It does not return secret values or call external APIs.
+`/health` and `/api/healthz` are simple liveness checks. `/readyz` reports configuration status by env var name only. It does not return secret values or call external APIs.
 
 ## Fivetran Evidence
 
