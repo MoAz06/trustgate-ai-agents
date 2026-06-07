@@ -267,25 +267,25 @@
       ),
       e("div", { className: "evidence-grid" },
         e(EvidenceBox, {
-          title: "Fivetran Evidence",
+          title: "Fivetran REST Evidence",
           rows: [
             ["connection", evidence.fivetran.connection_id],
             ["sync", evidence.fivetran.sync_state_summary],
             ["schema hash", evidence.fivetran.schema_config_hash],
-            ["schema changed", String(evidence.fivetran.schema_change_detected)],
+            ["schema status", schemaStatusLabel(evidence.fivetran)],
             ["schema handling", evidence.fivetran.schema_change_handling],
-            ["raw refs", evidence.fivetran.raw_refs ? evidence.fivetran.raw_refs.join(", ") : "unknown"]
+            ["API refs", summarizeRefs(evidence.fivetran.raw_refs)]
           ]
         }),
         e(EvidenceBox, {
-          title: "BigQuery Evidence",
+          title: "BigQuery Row Evidence",
           rows: [
             ["source", evidence.bigquery.source],
             ["table", evidence.bigquery.table],
             ["row tier", evidence.bigquery.customer_tier],
             ["row amount", evidence.bigquery.refund_amount ? `$${evidence.bigquery.refund_amount}` : "unknown"],
             ["selected by", evidence.bigquery.selected_by],
-            ["columns", evidence.bigquery.available_columns ? evidence.bigquery.available_columns.join(", ") : "unknown"],
+            ["columns", summarizeColumns(evidence.bigquery.available_columns)],
             ["warning", evidence.bigquery.mapping_warning || "none"]
           ]
         })
@@ -367,6 +367,26 @@
       .replace(/\*\*/g, "")
       .replace(/`/g, "")
       .trim();
+  }
+
+  function schemaStatusLabel(fivetran) {
+    if (fivetran.source !== "fivetran_rest_live") {
+      return "demo schema signal";
+    }
+    return "config captured from REST";
+  }
+
+  function summarizeRefs(refs) {
+    if (!refs || !refs.length) return "unknown";
+    return `${refs.length} Fivetran REST endpoints`;
+  }
+
+  function summarizeColumns(columns) {
+    if (!columns || !columns.length) return "unknown";
+    const important = ["customer_id", "customer_tier", "refund_amount", "last_order_status", "open_ticket_count"];
+    const present = important.filter((column) => columns.includes(column));
+    if (!present.length) return `${columns.length} columns`;
+    return `${columns.length} columns; key fields: ${present.join(", ")}`;
   }
 
   function Metric({ label, value }) {
