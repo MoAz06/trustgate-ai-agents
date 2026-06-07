@@ -47,12 +47,22 @@ Gemini explains the receipt. Gemini does not decide the policy.
 
 ```bash
 npm run check
+npm test
 npm start
 ```
 
 Open `http://localhost:8080`.
 
 Without Fivetran credentials, the app uses clearly labeled demo evidence. With credentials, it reads Fivetran REST evidence.
+
+Small reliability endpoints:
+
+```bash
+curl http://localhost:8080/healthz
+curl http://localhost:8080/readyz
+```
+
+`/readyz` reports configuration status by env var name only. It does not return secret values or call external APIs.
 
 ## Fivetran Evidence
 
@@ -139,6 +149,17 @@ scripts/deploy-cloud-run.sh
 The deploy scripts grant the Cloud Run service account BigQuery read/query roles and `roles/aiplatform.user` so the hosted `/api/agent/run` route can call Gemini from Cloud Run metadata auth.
 
 If Cloud Run authentication is enabled later, the calling agent service account needs `roles/run.invoker`.
+
+## Production Hardening Path
+
+I am not calling this production-ready. The current build proves the runtime decision loop for the hackathon. The next engineering work I would do before trusting this in a real workflow:
+
+- Protect mutating endpoints like `/api/actions/propose`, `/api/demo/*`, and `/api/approvals/*` with IAM, IAP, or signed internal calls.
+- Move the policy and input contract into versioned config files instead of keeping all demo policy rules in `server.js`.
+- Persist decision receipts and approval receipts in immutable storage so a later review can replay the same input, evidence, policy version, and result.
+- Add Cloud Logging metrics for `ALLOW`, `APPROVAL_REQUIRED`, `BLOCK`, evidence failures, and Gemini tool-call failures.
+- Add CI with syntax checks, policy tests, and secret scanning before every push.
+- Replace the public demo reset/inject routes with a separate demo mode flag.
 
 ## Claims I Am Not Making
 
