@@ -24,7 +24,55 @@ function loadDotEnv() {
   }
 }
 
-loadDotEnv();
+if (process.env.TRUSTGATE_SKIP_DOTENV !== "1") {
+  loadDotEnv();
+}
+
+function requiredEnvStatus(names) {
+  const missing = names.filter((name) => !process.env[name]);
+  return {
+    configured: missing.length === 0,
+    missing
+  };
+}
+
+function readinessReport() {
+  const fivetran = requiredEnvStatus(["FIVETRAN_API_KEY", "FIVETRAN_API_SECRET"]);
+  const vertexEnv = requiredEnvStatus(["VERTEX_PROJECT_ID", "VERTEX_LOCATION", "VERTEX_MODEL"]);
+  const hasVertexAuth = Boolean(process.env.VERTEX_ACCESS_TOKEN || process.env.GOOGLE_OAUTH_ACCESS_TOKEN || process.env.K_SERVICE);
+  const hasBigQueryAuth = Boolean(process.env.BIGQUERY_ACCESS_TOKEN || process.env.GOOGLE_OAUTH_ACCESS_TOKEN || process.env.K_SERVICE);
+
+  return {
+    ok: true,
+    service: "trustgate",
+    time: new Date().toISOString(),
+    checks: {
+      fivetran_rest: {
+        status: fivetran.configured ? "live_configured" : "demo_fallback_available",
+        missing_env: fivetran.missing
+      },
+      vertex_gemini: {
+        status: hasVertexAuth ? "auth_available" : "local_auth_missing",
+        missing_env: vertexEnv.missing,
+        model: process.env.VERTEX_MODEL || "gemini-3.5-flash",
+        location: process.env.VERTEX_LOCATION || "global"
+      },
+      bigquery: {
+        status: hasBigQueryAuth ? "auth_available" : "local_auth_missing",
+        table: bigQueryTableRef().tableId
+      }
+    },
+    note: "No secret values are returned. Live external calls are checked by the evidence endpoints."
+  };
+}
+
+function logStartupConfig() {
+  const report = readinessReport();
+  const summary = Object.fromEntries(
+    Object.entries(report.checks).map(([name, check]) => [name, check.status])
+  );
+  console.log(`TrustGate config status: ${JSON.stringify(summary)}`);
+}
 
 const contract = {
   contract_id: "customer_refund_input",
@@ -1025,8 +1073,13 @@ async function router(req, res) {
   const url = new URL(req.url, `http://${req.headers.host}`);
   const pathname = url.pathname;
 
-  if (req.method === "GET" && pathname === "/health") {
+  if (req.method === "GET" && (pathname === "/health" || pathname === "/healthz")) {
     json(res, 200, { ok: true, service: "trustgate", time: new Date().toISOString() });
+    return;
+  }
+
+  if (req.method === "GET" && pathname === "/readyz") {
+    json(res, 200, readinessReport());
     return;
   }
 
@@ -1129,6 +1182,25 @@ const server = http.createServer((req, res) => {
   });
 });
 
-server.listen(PORT, () => {
-  console.log(`TrustGate listening on http://localhost:${PORT}`);
-});
+function startServer() {
+  server.listen(PORT, () => {
+    logStartupConfig();
+    console.log(`TrustGate listening on http://localhost:${PORT}`);
+  });
+}
+
+if (require.main === module) {
+  startServer();
+}
+
+module.exports = {
+  contract,
+  demoState,
+  resetDemoState,
+  scoreBreakdown,
+  decide,
+  readinessReport,
+  router,
+  server,
+  startServer
+};
