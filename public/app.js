@@ -272,7 +272,9 @@
             ["connection", evidence.fivetran.connection_id],
             ["sync", evidence.fivetran.sync_state_summary],
             ["schema hash", evidence.fivetran.schema_config_hash],
-            ["schema changed", String(evidence.fivetran.schema_change_detected)]
+            ["schema changed", String(evidence.fivetran.schema_change_detected)],
+            ["schema handling", evidence.fivetran.schema_change_handling],
+            ["raw refs", evidence.fivetran.raw_refs ? evidence.fivetran.raw_refs.join(", ") : "unknown"]
           ]
         }),
         e(EvidenceBox, {

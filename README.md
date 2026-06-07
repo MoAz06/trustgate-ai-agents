@@ -56,6 +56,8 @@ Without Fivetran credentials, the app uses clearly labeled demo evidence. With c
 
 ## Fivetran Evidence
 
+For the Fivetran track, I used the REST API option listed in the hackathon Fivetran resources: `https://rapid-agent.devpost.com/details/fivetran-resources`.
+
 Create `.env` from `.env.example` and add a scoped Fivetran API key:
 
 ```bash

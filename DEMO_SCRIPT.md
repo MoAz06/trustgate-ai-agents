@@ -1,5 +1,3 @@
-# This is the script I used to record the demo. I am keeping it public so judges and other builders can reproduce the flow.
-
 # Three-Minute Demo Script
 
 
