@@ -1,8 +1,8 @@
 # TrustGate for AI Agents
 
-TrustGate is the small gate I built between a Gemini agent and a refund action. The agent proposes the action; TrustGate checks live Fivetran evidence, a local input contract, and a deterministic policy before returning `ALLOW`, `APPROVAL_REQUIRED`, or `BLOCK`.
+TrustGate is a runtime gate I built between a Gemini agent and a refund action. The agent proposes the action; TrustGate checks live Fivetran evidence, a local input contract, and a deterministic policy before returning `ALLOW`, `APPROVAL_REQUIRED`, or `BLOCK`.
 
-This repo is intentionally scoped like a hackathon build, not a pretend production platform. The part I care about proving is the loop:
+This repo is intentionally scoped as a hackathon proof, not a production platform claim. The part I care about proving is the loop:
 
 I am keeping the build log, demo script, and setup notes public so judges and other builders can reproduce the flow instead of only watching the video.
 
@@ -23,7 +23,7 @@ Gemini / Vertex AI function call
 - Action endpoint: `POST /api/actions/propose`
 - OpenAPI spec for tool imports when available: `/openapi.json`
 - Live Fivetran evidence observed in receipts: `source=fivetran_rest_live`
-- Live BigQuery evidence when Cloud Run has BigQuery IAM: `source=bigquery_rest_live`
+- Live BigQuery evidence observed in hosted receipts: `source=bigquery_rest_live`
 - Fivetran connection used in the demo: `fulfill_pageant`
 - Working Gemini paths: hosted `/api/agent/run` and `scripts/vertex_trustgate_agent_demo.py`
 - Build notes with the things that broke: `BUILD_LOG.md`
@@ -91,11 +91,11 @@ Test the evidence endpoint:
 curl http://localhost:8080/api/fivetran/evidence
 ```
 
-The important proof is not a Fivetran logo in the UI. It is a real Fivetran field inside the action receipt.
+The important proof is the real Fivetran field inside the action receipt.
 
 ## BigQuery Evidence
 
-The hosted service also tries to query the Fivetran-synced BigQuery table:
+The hosted service queries the Fivetran-synced BigQuery table:
 
 ```text
 trustgate-hackathon.trustgate_demo.customers
