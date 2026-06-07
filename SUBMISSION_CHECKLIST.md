@@ -21,8 +21,8 @@ Official references:
 | Hosted project URL | PASS | `https://trustgate-24801890031.us-central1.run.app` |
 | Cloud Run stateless approval flow | PASS | Approval receipt can be sent with the next action call; it no longer depends only on in-memory decision history. |
 | Hosted Gemini tool-call flow | PASS | Dashboard shows `Gemini Agent Run`, `proposeTrustGateAction`, TrustGate receipt, and Gemini final answer. |
-| Public code repository | PENDING | Publish the repo before submission. |
-| Open-source license visible in repo | PASS locally / PENDING on GitHub | `LICENSE` is present locally. GitHub still needs the public repo. |
+| Public code repository | PASS | Public repo: `https://github.com/MoAz06/trustgate-ai-agents`. |
+| Open-source license visible in repo | PASS | `LICENSE` is present and GitHub recognizes the repo license. |
 | Demo video, public YouTube/Vimeo | PENDING | Record under 3 minutes; English or English subtitles. |
 | Written submission in English | PENDING | Use the README/Devpost wording, not the old strategy document. |
 | Built during contest period | PENDING | Mention solo build and include `BUILD_LOG.md`. |
