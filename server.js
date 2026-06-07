@@ -1073,7 +1073,7 @@ async function router(req, res) {
   const url = new URL(req.url, `http://${req.headers.host}`);
   const pathname = url.pathname;
 
-  if (req.method === "GET" && (pathname === "/health" || pathname === "/healthz")) {
+  if (req.method === "GET" && (pathname === "/health" || pathname === "/healthz" || pathname === "/api/healthz")) {
     json(res, 200, { ok: true, service: "trustgate", time: new Date().toISOString() });
     return;
   }
