@@ -212,13 +212,13 @@
               selected ? e("span", { className: badgeClass(selected.decision) }, selected.decision) : null
             ),
             e("div", { className: "panel-body" },
-              selected ? e(DecisionDetail, { decision: selected, onApprove: approve, busy }) : e("div", { className: "empty" }, "Start with Run Gemini agent or Run policy only. The first receipt should show ALLOW with live Fivetran and BigQuery evidence.")
+              selected ? e(DecisionDetail, { decision: selected, onApprove: approve, busy }) : e("div", { className: "empty" }, "No receipt selected yet. New decisions will show policy, Fivetran, BigQuery, and contract evidence here.")
             )
           ),
           e("div", { className: "panel" },
             e("div", { className: "panel-header" }, e("h2", null, "Gemini Agent Run")),
             e("div", { className: "panel-body" },
-              agentRun ? e(AgentRunDetail, { agentRun }) : e("div", { className: "empty" }, "Click Run Gemini agent to show the actual AI tool call and Gemini explanation.")
+              agentRun ? e(AgentRunDetail, { agentRun }) : e("div", { className: "empty" }, "No Gemini run yet. The agent trace will show the tool request, TrustGate receipt, and final explanation.")
             )
           ),
           e("div", { className: "panel" },
