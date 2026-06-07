@@ -1,5 +1,6 @@
 # Three-Minute Demo Script
 
+This is the script I used to record the demo. I am keeping it public so judges and other builders can reproduce the flow.
 
 Target length: 2:45 to 3:00. Keep it in English or add English subtitles.
 
@@ -93,7 +94,7 @@ When the customer tier matches contract v1 and the action is inside policy, Trus
 Click:
 
 ```text
-Inject new customer_tier enum
+Simulate new customer tier
 ```
 
 Then run a refund again.
@@ -127,7 +128,7 @@ Then set amount to `40` and click `Run Gemini agent` again. Show `ALLOW` with ap
 Click:
 
 ```text
-Inject critical schema failure
+Simulate schema failure
 ```
 
 Run the refund again and show `BLOCK`.
