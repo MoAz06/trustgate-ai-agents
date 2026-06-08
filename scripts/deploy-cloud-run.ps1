@@ -105,12 +105,17 @@ if (-not $SecretExists) {
 $MinInstances = $env:MIN_INSTANCES
 if (-not $MinInstances) { $MinInstances = "1" }
 
+# Freshness SLA in minutes for the data-freshness policy signal. Default 1440 (24h).
+# Raise it if the Fivetran connector syncs less often than this.
+$FreshnessSlaMinutes = $env:FRESHNESS_SLA_MINUTES
+if (-not $FreshnessSlaMinutes) { $FreshnessSlaMinutes = "1440" }
+
 & $Gcloud run deploy $ServiceName `
   --source . `
   --region $Region `
   --allow-unauthenticated `
   --min-instances $MinInstances `
-  --set-env-vars "FIVETRAN_CONNECTION_ID=$FivetranConnectionId,BIGQUERY_PROJECT_ID=$BigQueryProjectId,BIGQUERY_DATASET=$BigQueryDataset,BIGQUERY_TABLE=$BigQueryTable,VERTEX_PROJECT_ID=$VertexProjectId,VERTEX_LOCATION=$VertexLocation,VERTEX_MODEL=$VertexModel" `
+  --set-env-vars "FIVETRAN_CONNECTION_ID=$FivetranConnectionId,BIGQUERY_PROJECT_ID=$BigQueryProjectId,BIGQUERY_DATASET=$BigQueryDataset,BIGQUERY_TABLE=$BigQueryTable,VERTEX_PROJECT_ID=$VertexProjectId,VERTEX_LOCATION=$VertexLocation,VERTEX_MODEL=$VertexModel,FRESHNESS_SLA_MINUTES=$FreshnessSlaMinutes" `
   --set-secrets "FIVETRAN_API_KEY=fivetran-api-key:latest,FIVETRAN_API_SECRET=fivetran-api-secret:latest"
 
 $ServiceUrl = & $Gcloud run services describe $ServiceName --region $Region --format="value(status.url)"
