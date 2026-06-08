@@ -15,3 +15,6 @@ service-account*.json
 
 # Internal planning note; keep public repo focused on build proof.
 TrustGate_Hackathon_Strategy.txt
+
+.codex-local/
+RECORDING_GUIDE.md
