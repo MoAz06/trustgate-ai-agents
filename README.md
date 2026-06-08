@@ -29,7 +29,6 @@ Gemini / Vertex AI function call
 - Working Gemini paths: hosted `/api/agent/run` and `scripts/vertex_trustgate_agent_demo.py`
 - Build notes with the things that broke: `BUILD_LOG.md`
 - Exact video flow: `DEMO_SCRIPT.md`
-- Submission risk checklist: `SUBMISSION_CHECKLIST.md`
 
 ## What It Does
 

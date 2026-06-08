@@ -136,7 +136,7 @@ Steps in Vertex AI Agent Designer (project `trustgate-hackathon`):
 Notes:
 
 - The Agent Designer UI only supports MCP servers that do not require authentication. The Cloud Run service is deployed `--allow-unauthenticated`, so `/mcp` works without auth headers.
-- `/mcp` is TrustGate's own MCP tool surface, not Fivetran's MCP server. The Fivetran evidence path inside TrustGate is REST. Do not pitch this as "we use Fivetran MCP".
+- `/mcp` is TrustGate's own MCP tool surface, not Fivetran's MCP server. The Fivetran evidence path inside TrustGate is REST. Do not pitch this as "TrustGate uses Fivetran's MCP".
 - The endpoint speaks MCP streamable-HTTP JSON-RPC and responds to `initialize`, `tools/list`, and `tools/call`.
 
 Use this hosted OpenAPI JSON only if the UI exposes OpenAPI tools:
