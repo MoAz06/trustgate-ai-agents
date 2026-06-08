@@ -110,6 +110,8 @@ bigquery_rest_live
 
 If the hosted endpoint says `bigquery_rest_live_partial`, BigQuery is readable but the Fivetran table column names do not include a recognizable `customer_tier`. The response includes `available_columns` so I can fix the sheet/schema instead of guessing.
 
+Data freshness is a real signal, not a mock. TrustGate reads the Fivetran-managed `_fivetran_synced` column on the selected BigQuery row and reports `real_freshness_minutes` (minutes since the last sync) against the contract `freshness_sla_minutes`. When the age exceeds the SLA, the policy adds the `stale_sync_supporting_signal` rule. The demo `Simulate stale sync` button sets `freshness_simulated: true` and a stale age so the SLA breach can be shown on camera; the receipt always reports the real sync age alongside the simulated flag, so the simulation is never hidden.
+
 For local development without Google credentials, TrustGate falls back to clearly labeled `demo_bigquery_contract_query`.
 
 ## Gemini Tool Path
