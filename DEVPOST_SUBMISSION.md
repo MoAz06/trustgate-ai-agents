@@ -55,7 +55,7 @@ Gemini explains the decision and cites the receipt. Gemini does not decide the p
 - Fivetran evidence: TrustGate reads the Fivetran REST API for connection details, sync state, and schema configuration, on a Google Sheets -> BigQuery connection.
 - BigQuery evidence: TrustGate queries the Fivetran-synced table trustgate-hackathon.trustgate_demo.customers for the live customer row used in the decision.
 - Policy engine: a deterministic rule set with transparent weights. risk_score is the sum of triggered rule weights, not a model confidence score.
-- Tests: 14 automated tests covering the policy decisions and the MCP endpoint.
+- Tests: 16 automated tests covering the policy decisions, the freshness signal, and the MCP endpoint.
 
 Honest scope note: TrustGate exposes its OWN MCP-compatible tool endpoint for agents. The Fivetran evidence path inside TrustGate uses the Fivetran REST API, which the hackathon Fivetran resource page lists as an integration option. We do not claim to use Fivetran's own MCP server.
 ```
