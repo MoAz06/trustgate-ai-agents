@@ -54,10 +54,16 @@ if ! gcloud secrets describe fivetran-api-secret >/dev/null 2>&1; then
   printf "%s" "$FIVETRAN_API_SECRET" | gcloud secrets create fivetran-api-secret --data-file=-
 fi
 
+# MIN_INSTANCES keeps one warm instance so the live URL has no cold start during
+# recording and the judging period (2026-06-22 to 2026-07-06). Set MIN_INSTANCES=0
+# after judging to stop paying for an idle instance.
+MIN_INSTANCES="${MIN_INSTANCES:-1}"
+
 gcloud run deploy "$SERVICE_NAME" \
   --source . \
   --region "$REGION" \
   --allow-unauthenticated \
+  --min-instances "$MIN_INSTANCES" \
   --set-env-vars "FIVETRAN_CONNECTION_ID=$FIVETRAN_CONNECTION_ID,BIGQUERY_PROJECT_ID=$BIGQUERY_PROJECT_ID,BIGQUERY_DATASET=$BIGQUERY_DATASET,BIGQUERY_TABLE=$BIGQUERY_TABLE,VERTEX_PROJECT_ID=$VERTEX_PROJECT_ID,VERTEX_LOCATION=$VERTEX_LOCATION,VERTEX_MODEL=$VERTEX_MODEL" \
   --set-secrets "FIVETRAN_API_KEY=fivetran-api-key:latest,FIVETRAN_API_SECRET=fivetran-api-secret:latest"
 
