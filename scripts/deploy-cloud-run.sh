@@ -59,12 +59,16 @@ fi
 # after judging to stop paying for an idle instance.
 MIN_INSTANCES="${MIN_INSTANCES:-1}"
 
+# Freshness SLA in minutes for the data-freshness policy signal. Default 1440 (24h).
+# Raise it if the Fivetran connector syncs less often than this.
+FRESHNESS_SLA_MINUTES="${FRESHNESS_SLA_MINUTES:-1440}"
+
 gcloud run deploy "$SERVICE_NAME" \
   --source . \
   --region "$REGION" \
   --allow-unauthenticated \
   --min-instances "$MIN_INSTANCES" \
-  --set-env-vars "FIVETRAN_CONNECTION_ID=$FIVETRAN_CONNECTION_ID,BIGQUERY_PROJECT_ID=$BIGQUERY_PROJECT_ID,BIGQUERY_DATASET=$BIGQUERY_DATASET,BIGQUERY_TABLE=$BIGQUERY_TABLE,VERTEX_PROJECT_ID=$VERTEX_PROJECT_ID,VERTEX_LOCATION=$VERTEX_LOCATION,VERTEX_MODEL=$VERTEX_MODEL" \
+  --set-env-vars "FIVETRAN_CONNECTION_ID=$FIVETRAN_CONNECTION_ID,BIGQUERY_PROJECT_ID=$BIGQUERY_PROJECT_ID,BIGQUERY_DATASET=$BIGQUERY_DATASET,BIGQUERY_TABLE=$BIGQUERY_TABLE,VERTEX_PROJECT_ID=$VERTEX_PROJECT_ID,VERTEX_LOCATION=$VERTEX_LOCATION,VERTEX_MODEL=$VERTEX_MODEL,FRESHNESS_SLA_MINUTES=$FRESHNESS_SLA_MINUTES" \
   --set-secrets "FIVETRAN_API_KEY=fivetran-api-key:latest,FIVETRAN_API_SECRET=fivetran-api-secret:latest"
 
 SERVICE_URL="$(gcloud run services describe "$SERVICE_NAME" --region "$REGION" --format='value(status.url)')"
