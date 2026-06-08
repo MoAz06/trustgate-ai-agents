@@ -1076,6 +1076,123 @@ function openApiSpec(req) {
   };
 }
 
+const MCP_PROTOCOL_VERSION = "2025-06-18";
+
+function mcpToolDefinitions() {
+  return trustGateFunctionDeclarations().map((fn) => ({
+    name: fn.name,
+    description: fn.description,
+    inputSchema: fn.parameters
+  }));
+}
+
+function jsonRpcResult(id, result) {
+  return { jsonrpc: "2.0", id, result };
+}
+
+function jsonRpcError(id, code, message) {
+  return { jsonrpc: "2.0", id, error: { code, message } };
+}
+
+async function handleMcpMessage(message) {
+  const { id, method, params } = message || {};
+  const isNotification = id === undefined || id === null;
+
+  if (method === "initialize") {
+    const clientVersion = params && params.protocolVersion;
+    return jsonRpcResult(id, {
+      protocolVersion: clientVersion || MCP_PROTOCOL_VERSION,
+      capabilities: { tools: { listChanged: false } },
+      serverInfo: { name: "trustgate-mcp", version: "0.1.0" }
+    });
+  }
+
+  if (method === "ping") {
+    return jsonRpcResult(id, {});
+  }
+
+  if (method && method.startsWith("notifications/")) {
+    return null;
+  }
+
+  if (method === "tools/list") {
+    return jsonRpcResult(id, { tools: mcpToolDefinitions() });
+  }
+
+  if (method === "tools/call") {
+    const toolName = params && params.name;
+    const args = (params && params.arguments) || {};
+    if (toolName !== "proposeTrustGateAction") {
+      return jsonRpcResult(id, {
+        isError: true,
+        content: [{ type: "text", text: "Unknown tool: " + toolName }]
+      });
+    }
+    try {
+      const action = actionFromBody(args);
+      const receipt = await evaluateAction(action);
+      return jsonRpcResult(id, {
+        isError: false,
+        content: [{ type: "text", text: JSON.stringify(receipt, null, 2) }],
+        structuredContent: receipt
+      });
+    } catch (error) {
+      return jsonRpcResult(id, {
+        isError: true,
+        content: [{ type: "text", text: "TrustGate evaluation failed: " + error.message }]
+      });
+    }
+  }
+
+  if (isNotification) {
+    return null;
+  }
+  return jsonRpcError(id, -32601, "Method not found: " + method);
+}
+
+async function handleMcp(req, res) {
+  if (req.method === "GET") {
+    json(res, 200, {
+      service: "trustgate-mcp",
+      protocolVersion: MCP_PROTOCOL_VERSION,
+      transport: "streamable-http",
+      tools: mcpToolDefinitions().map((tool) => tool.name)
+    });
+    return;
+  }
+
+  let body;
+  try {
+    body = await readRequestBody(req);
+  } catch (error) {
+    json(res, 400, jsonRpcError(null, -32700, error.message));
+    return;
+  }
+
+  if (Array.isArray(body)) {
+    const responses = [];
+    for (const message of body) {
+      const response = await handleMcpMessage(message);
+      if (response) responses.push(response);
+    }
+    if (responses.length === 0) {
+      res.writeHead(202, { "Access-Control-Allow-Origin": "*" });
+      res.end();
+      return;
+    }
+    json(res, 200, responses);
+    return;
+  }
+
+  const response = await handleMcpMessage(body);
+  if (!response) {
+    res.writeHead(202, { "Access-Control-Allow-Origin": "*" });
+    res.end();
+    return;
+  }
+  json(res, 200, response);
+}
+
 async function router(req, res) {
   if (req.method === "OPTIONS") {
     json(res, 204, {});
@@ -1097,6 +1214,11 @@ async function router(req, res) {
 
   if (req.method === "GET" && pathname === "/openapi.json") {
     json(res, 200, openApiSpec(req));
+    return;
+  }
+
+  if (pathname === "/mcp" && (req.method === "POST" || req.method === "GET")) {
+    await handleMcp(req, res);
     return;
   }
 
@@ -1214,5 +1336,7 @@ module.exports = {
   readinessReport,
   router,
   server,
-  startServer
+  startServer,
+  mcpToolDefinitions,
+  handleMcpMessage
 };

@@ -7,8 +7,8 @@
   "scripts": {
     "start": "node server.js",
     "dev": "node server.js",
-    "check": "node --check server.js && node --check public/app.js && node --check test/policy.test.js",
-    "test": "node --test test/policy.test.js"
+    "check": "node --check server.js && node --check public/app.js && node --check test/policy.test.js && node --check test/mcp.test.js",
+    "test": "node --test test/policy.test.js test/mcp.test.js"
   },
   "engines": {
     "node": ">=18"

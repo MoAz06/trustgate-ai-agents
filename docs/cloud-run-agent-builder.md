@@ -117,6 +117,28 @@ In the Agent Builder / Agent Studio UI I had access to, the Tools section showed
 docs/vertex-agent-function-calling.md
 ```
 
+### Preferred path: connect TrustGate as an MCP Server tool
+
+Because the Agent Designer UI exposes `Add tools -> MCP Server`, the cleanest way to build the agent inside Agent Builder is to point that tool at TrustGate's own MCP endpoint:
+
+```text
+https://trustgate-24801890031.us-central1.run.app/mcp
+```
+
+Steps in Vertex AI Agent Designer (project `trustgate-hackathon`):
+
+1. Create an agent named `Customer Recovery Agent` using the instruction text below.
+2. Click `Add tools` -> `MCP Server`.
+3. Display name: `TrustGate`. Endpoint URL: the `/mcp` URL above. Click `Save`.
+4. Agent Designer discovers `proposeTrustGateAction` automatically.
+5. Run the preview prompt and screenshot the tool call for the demo.
+
+Notes:
+
+- The Agent Designer UI only supports MCP servers that do not require authentication. The Cloud Run service is deployed `--allow-unauthenticated`, so `/mcp` works without auth headers.
+- `/mcp` is TrustGate's own MCP tool surface, not Fivetran's MCP server. The Fivetran evidence path inside TrustGate is REST. Do not pitch this as "we use Fivetran MCP".
+- The endpoint speaks MCP streamable-HTTP JSON-RPC and responds to `initialize`, `tools/list`, and `tools/call`.
+
 Use this hosted OpenAPI JSON only if the UI exposes OpenAPI tools:
 
 

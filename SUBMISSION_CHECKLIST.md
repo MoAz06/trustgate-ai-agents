@@ -17,7 +17,8 @@ Official references:
 | Web, Android, or iOS platform | PASS | Web app is hosted by the Cloud Run service. |
 | Use Fivetran for the Fivetran track | PASS | Receipt includes live Fivetran REST evidence: `fivetran_rest_live`, connection `fulfill_pageant`. |
 | Show Fivetran-synced data in BigQuery | PASS | Live endpoint and receipts show `evidence.bigquery.source=bigquery_rest_live`, not `bigquery_rest_live_partial`. |
-| Partner MCP requirement | YELLOW | The general rules say partner MCP server. The Fivetran resource page lists REST API as an alternative integration option. Do not hide that the working evidence path is REST. |
+| Partner MCP requirement | YELLOW | The general rules say partner MCP server. The Fivetran resource page lists REST API as an alternative integration option, and the working Fivetran evidence path is REST. Do not hide that. |
+| Agent Builder + MCP tool | YELLOW | TrustGate now exposes its own MCP-compatible tool endpoint at `/mcp` (`proposeTrustGateAction`) so the agent can be built in Vertex AI Agent Designer with an `Add tools -> MCP Server` connection. This is TrustGate's MCP endpoint, NOT Fivetran's MCP. Never pitch it as "we use Fivetran MCP". |
 | Hosted project URL | PASS | `https://trustgate-24801890031.us-central1.run.app` |
 | Cloud Run stateless approval flow | PASS | Approval receipt can be sent with the next action call; it no longer depends only on in-memory decision history. |
 | Hosted Gemini tool-call flow | PASS | Dashboard shows `Gemini Agent Run`, `proposeTrustGateAction`, TrustGate receipt, and Gemini final answer. |
@@ -32,7 +33,7 @@ Official references:
 
 - Do not claim production-ready.
 - Do not claim invisible semantic-drift detection.
-- Do not claim MCP if the demo receipt shows REST.
+- Do not claim Fivetran MCP if the demo receipt shows Fivetran REST. The `/mcp` endpoint is TrustGate's own MCP tool surface, not Fivetran's MCP server.
 - Do not claim the Agent Builder UI imported OpenAPI unless that exact screen is recorded.
 - Do not describe `risk_score` as AI confidence.
 

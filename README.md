@@ -21,6 +21,7 @@ Gemini / Vertex AI function call
 - Hosted app/API: `https://trustgate-24801890031.us-central1.run.app`
 - Gemini agent endpoint: `POST /api/agent/run`
 - Action endpoint: `POST /api/actions/propose`
+- MCP tool endpoint for Agent Builder `Add tools -> MCP Server`: `POST /mcp` (TrustGate's own MCP surface, not Fivetran's MCP)
 - OpenAPI spec for tool imports when available: `/openapi.json`
 - Live Fivetran evidence observed in receipts: `source=fivetran_rest_live`
 - Live BigQuery evidence observed in hosted receipts: `source=bigquery_rest_live`
@@ -115,7 +116,17 @@ For local development without Google credentials, TrustGate falls back to clearl
 
 I first looked for an OpenAPI import in the Agent Builder / Agent Studio UI I had access to. That UI showed Google Search, URL Context, and MCP Server, but I did not see an OpenAPI import path.
 
-The hosted app now has a visible Gemini run endpoint:
+Because the UI exposes an `Add tools -> MCP Server` path, TrustGate now serves its own MCP-compatible tool endpoint so the agent can be built directly in Vertex AI Agent Designer:
+
+```text
+POST /mcp
+```
+
+This endpoint speaks the MCP streamable-HTTP JSON-RPC protocol and exposes one tool, `proposeTrustGateAction`. In Agent Designer I add it with `Add tools -> MCP Server` and the endpoint URL, and the agent discovers the tool automatically.
+
+To be precise about what this is: `/mcp` is TrustGate's own MCP tool surface for agents. It is not Fivetran's MCP server. The Fivetran evidence path inside TrustGate uses the Fivetran REST API, which the hackathon Fivetran resource page lists as an integration option.
+
+The hosted app also has a visible Gemini run endpoint:
 
 ```text
 POST /api/agent/run
