@@ -88,6 +88,7 @@ const demoDefaults = {
   fivetranStatus: "healthy",
   schemaConfigHash: "schema_v1_hash",
   schemaChangeDetected: false,
+  staleSyncInjected: false,
   criticalFailure: false,
   decisions: [],
   activeApproval: null
@@ -307,8 +308,8 @@ async function getFivetranEvidence() {
         sync_state: syncState,
         setup_state: status.setup_state || "unknown",
         sync_state_summary: status.sync_state || "unknown",
-        last_successful_sync: status.succeeded_at || status.updated_at || null,
-        schema_change_detected: schemaConfigHash !== demoState.schemaConfigHash,
+        last_successful_sync: status.succeeded_at || status.updated_at || "not_reported_by_connector",
+        schema_change_detected: demoState.schemaChangeDetected,
         schema_config_hash: schemaConfigHash,
         schema_change_handling: schemaData.schema_change_handling || "unknown",
         optional_call_status: {
@@ -361,6 +362,11 @@ function demoBigQueryEvidence(action, customerTier, error) {
     reason: action.reason || "late_delivery",
     observed_enum_values: [...new Set([...contract.allowed_customer_tiers, customerTier])],
     selected_by: "local_demo_state",
+    fivetran_synced_at: new Date(Date.now() - demoState.lastSyncMinutesAgo * 60_000).toISOString(),
+    real_freshness_minutes: demoState.lastSyncMinutesAgo,
+    freshness_minutes: effectiveFreshnessMinutes(demoState.lastSyncMinutesAgo),
+    freshness_sla_minutes: contract.freshness_sla_minutes,
+    freshness_simulated: demoState.staleSyncInjected,
     error
   };
 }
@@ -424,6 +430,38 @@ function numberOrNull(value) {
   return Number.isFinite(number) ? number : null;
 }
 
+// Minutes since a BigQuery timestamp. BigQuery REST returns TIMESTAMP as epoch
+// seconds (a numeric string); ISO strings are handled as a fallback.
+function minutesSince(value) {
+  if (value === null || value === undefined || value === "") return null;
+  const asNumber = Number(value);
+  let ms;
+  if (Number.isFinite(asNumber)) {
+    ms = asNumber * 1000;
+  } else {
+    const parsed = Date.parse(value);
+    if (Number.isNaN(parsed)) return null;
+    ms = parsed;
+  }
+  return Math.max(0, Math.round((Date.now() - ms) / 60000));
+}
+
+// Effective freshness used by the policy: the real Fivetran sync age from the
+// BigQuery _fivetran_synced column, unless a stale-sync simulation is active.
+function effectiveFreshnessMinutes(realFreshnessMinutes) {
+  if (demoState.staleSyncInjected) return demoState.lastSyncMinutesAgo;
+  return realFreshnessMinutes;
+}
+
+// Render a BigQuery TIMESTAMP (epoch seconds string or ISO) as an ISO string.
+function bqTimestampToIso(value) {
+  if (value === null || value === undefined || value === "") return null;
+  const asNumber = Number(value);
+  const ms = Number.isFinite(asNumber) ? asNumber * 1000 : Date.parse(value);
+  if (Number.isNaN(ms)) return null;
+  return new Date(ms).toISOString();
+}
+
 async function bigQueryRequest(projectId, body) {
   const access = await bigQueryAccessToken();
   const response = await fetch(`https://bigquery.googleapis.com/bigquery/v2/projects/${projectId}/queries`, {
@@ -476,6 +514,9 @@ async function getLiveBigQueryEvidence(action) {
   const mappedRefundAmount = fieldValue(row, ["refund_amount", "refundamount", "amount", "refund"]);
   const mappedReason = fieldValue(row, ["reason", "refund_reason", "refundreason", "demo_reason"]);
   const mappedDemoNote = fieldValue(row, ["demo_note", "demonote", "note", "notes"]);
+  const syncedAtRaw = fieldValue(row, ["_fivetran_synced", "fivetran_synced", "synced_at"]);
+  const realFreshnessMinutes = minutesSince(syncedAtRaw);
+  const freshnessMinutes = effectiveFreshnessMinutes(realFreshnessMinutes);
 
   if (!row.customer_id) {
     return {
@@ -513,6 +554,11 @@ async function getLiveBigQueryEvidence(action) {
     auth_source: authSource,
     available_columns: availableColumns,
     observed_enum_values: [...new Set([...contract.allowed_customer_tiers, tierFromBigQuery])],
+    fivetran_synced_at: bqTimestampToIso(syncedAtRaw),
+    real_freshness_minutes: realFreshnessMinutes,
+    freshness_minutes: freshnessMinutes,
+    freshness_sla_minutes: contract.freshness_sla_minutes,
+    freshness_simulated: demoState.staleSyncInjected,
     mapping_warning: mappedTier ? null : "customer_tier column was not found; TrustGate used demo target tier after reading the live BigQuery row"
   };
 }
@@ -594,7 +640,11 @@ function decide(action, fivetranEvidence, bigqueryEvidence) {
   if (amount > 100) rules.push("high_refund_amount");
   if (partialBigQueryEvidence) rules.push("partial_bigquery_contract_evidence");
   if (fivetranEvidence.source.includes("demo")) rules.push("partial_contract_evidence");
-  if ((fivetranEvidence.last_successful_sync_minutes_ago || 0) > contract.freshness_sla_minutes) {
+  const freshnessMinutes =
+    numberOrNull(bigqueryEvidence.freshness_minutes) !== null
+      ? bigqueryEvidence.freshness_minutes
+      : (fivetranEvidence.last_successful_sync_minutes_ago || 0);
+  if (freshnessMinutes > contract.freshness_sla_minutes) {
     rules.push("stale_sync_supporting_signal");
   }
 
@@ -606,7 +656,8 @@ function decide(action, fivetranEvidence, bigqueryEvidence) {
     return buildDecision("APPROVAL_REQUIRED", rules, amount, customerTier, fivetranEvidence, bigqueryEvidence, appliedApproval);
   }
 
-  return buildDecision("ALLOW", [], amount, customerTier, fivetranEvidence, bigqueryEvidence, appliedApproval);
+  const allowSupportingRules = rules.filter((rule) => rule === "stale_sync_supporting_signal");
+  return buildDecision("ALLOW", allowSupportingRules, amount, customerTier, fivetranEvidence, bigqueryEvidence, appliedApproval);
 }
 
 function buildDecision(decision, triggeredRules, amount, customerTier, fivetranEvidence, bigqueryEvidence, appliedApproval) {
@@ -1291,6 +1342,7 @@ async function router(req, res) {
 
   if (req.method === "POST" && pathname === "/api/demo/inject-stale-sync") {
     demoState.lastSyncMinutesAgo = 42;
+    demoState.staleSyncInjected = true;
     json(res, 200, { ok: true, demo_state: demoState });
     return;
   }
