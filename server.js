@@ -78,9 +78,7 @@ const contract = {
   contract_id: "customer_refund_input",
   version: "v1",
   allowed_customer_tiers: ["standard", "premium", "enterprise"],
-  // Freshness SLA in minutes. Configurable so the demo can match the Fivetran
-  // connector's real sync cadence. Default 1440 (24h): a refund decision should
-  // run on data synced within the last day.
+  // override with FRESHNESS_SLA_MINUTES to match the connector sync schedule
   freshness_sla_minutes: Number(process.env.FRESHNESS_SLA_MINUTES) > 0 ? Number(process.env.FRESHNESS_SLA_MINUTES) : 1440,
   required_fields: ["customer_id", "customer_tier", "last_order_status", "open_ticket_count"]
 };
@@ -433,8 +431,7 @@ function numberOrNull(value) {
   return Number.isFinite(number) ? number : null;
 }
 
-// Minutes since a BigQuery timestamp. BigQuery REST returns TIMESTAMP as epoch
-// seconds (a numeric string); ISO strings are handled as a fallback.
+// BigQuery returns TIMESTAMP as epoch seconds; fall back to Date.parse for ISO
 function minutesSince(value) {
   if (value === null || value === undefined || value === "") return null;
   const asNumber = Number(value);
@@ -449,14 +446,11 @@ function minutesSince(value) {
   return Math.max(0, Math.round((Date.now() - ms) / 60000));
 }
 
-// Effective freshness used by the policy: the real Fivetran sync age from the
-// BigQuery _fivetran_synced column, unless a stale-sync simulation is active.
 function effectiveFreshnessMinutes(realFreshnessMinutes) {
   if (demoState.staleSyncInjected) return demoState.lastSyncMinutesAgo;
   return realFreshnessMinutes;
 }
 
-// Render a BigQuery TIMESTAMP (epoch seconds string or ISO) as an ISO string.
 function bqTimestampToIso(value) {
   if (value === null || value === undefined || value === "") return null;
   const asNumber = Number(value);
