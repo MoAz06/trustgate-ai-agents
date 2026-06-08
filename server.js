@@ -78,7 +78,10 @@ const contract = {
   contract_id: "customer_refund_input",
   version: "v1",
   allowed_customer_tiers: ["standard", "premium", "enterprise"],
-  freshness_sla_minutes: 15,
+  // Freshness SLA in minutes. Configurable so the demo can match the Fivetran
+  // connector's real sync cadence. Default 1440 (24h): a refund decision should
+  // run on data synced within the last day.
+  freshness_sla_minutes: Number(process.env.FRESHNESS_SLA_MINUTES) > 0 ? Number(process.env.FRESHNESS_SLA_MINUTES) : 1440,
   required_fields: ["customer_id", "customer_tier", "last_order_status", "open_ticket_count"]
 };
 
@@ -1344,7 +1347,7 @@ async function router(req, res) {
   }
 
   if (req.method === "POST" && pathname === "/api/demo/inject-stale-sync") {
-    demoState.lastSyncMinutesAgo = 42;
+    demoState.lastSyncMinutesAgo = contract.freshness_sla_minutes + 60;
     demoState.staleSyncInjected = true;
     json(res, 200, { ok: true, demo_state: demoState });
     return;
