@@ -43,6 +43,18 @@ Gemini explains the receipt. Gemini does not decide the policy.
 
 `risk_score` is not a model confidence score. It is a transparent sum of triggered rule weights, shown as `risk_breakdown` in the receipt.
 
+## Dashboard
+
+Opening the hosted URL (or `localhost:8080`) loads an interactive control-room dashboard, not just an API. From the Action Console you set a refund amount and run the agent or the policy. Each decision renders as:
+
+- a colour-coded decision banner (green `ALLOW`, amber `APPROVAL_REQUIRED`, red `BLOCK`) with the one-line reason and the receipt id,
+- an evidence trace, Agent -> Fivetran -> BigQuery -> Policy, with the live source at each step,
+- evidence cards for the Fivetran REST data, the BigQuery row, the contract diff, and the risk breakdown,
+- a `Gemini Agent Run` panel with the tool call and Gemini's explanation,
+- a developer-view toggle for the raw receipt JSON.
+
+The `Simulate` buttons inject a new customer tier, a stale sync, or a schema failure so the three decision paths can be shown live. The web app is served by the Cloud Run service. It is built with React loaded as a local vendored bundle (no build step), so the same `public/` is served identically in local dev and on Cloud Run.
+
 ## Run Locally
 
 ```bash
