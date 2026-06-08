@@ -285,6 +285,7 @@
             ["row tier", evidence.bigquery.customer_tier],
             ["row amount", evidence.bigquery.refund_amount ? `$${evidence.bigquery.refund_amount}` : "unknown"],
             ["selected by", evidence.bigquery.selected_by],
+            ["freshness", freshnessLabel(evidence.bigquery)],
             ["columns", summarizeColumns(evidence.bigquery.available_columns)],
             ["warning", evidence.bigquery.mapping_warning || "none"]
           ]
@@ -379,6 +380,18 @@
   function summarizeRefs(refs) {
     if (!refs || !refs.length) return "unknown";
     return `${refs.length} Fivetran REST endpoints`;
+  }
+
+  function freshnessLabel(bigquery) {
+    if (!bigquery || bigquery.freshness_minutes === undefined || bigquery.freshness_minutes === null) {
+      return "unknown";
+    }
+    const sla = bigquery.freshness_sla_minutes;
+    const base = `${bigquery.freshness_minutes} min since Fivetran sync${sla ? ` (SLA ${sla})` : ""}`;
+    if (bigquery.freshness_simulated) {
+      return `${base} — SIMULATED stale`;
+    }
+    return base;
   }
 
   function summarizeColumns(columns) {
