@@ -112,6 +112,8 @@ If the hosted endpoint says `bigquery_rest_live_partial`, BigQuery is readable b
 
 Data freshness is a real signal, not a mock. TrustGate reads the Fivetran-managed `_fivetran_synced` column on the selected BigQuery row and reports `real_freshness_minutes` (minutes since the last sync) against the contract `freshness_sla_minutes`. When the age exceeds the SLA, the policy adds the `stale_sync_supporting_signal` rule. The demo `Simulate stale sync` button sets `freshness_simulated: true` and a stale age so the SLA breach can be shown on camera; the receipt always reports the real sync age alongside the simulated flag, so the simulation is never hidden.
 
+The SLA is configurable with `FRESHNESS_SLA_MINUTES` (default 1440 = 24h) so it can match the connector's real sync cadence. For a clean baseline `ALLOW` during recording and the judging window, set the Fivetran connector to a scheduled sync that runs within the SLA (so the synced data stays recent); otherwise raise `FRESHNESS_SLA_MINUTES` to cover the gap. The `Simulate stale sync` injection always exceeds the SLA regardless of its value.
+
 For local development without Google credentials, TrustGate falls back to clearly labeled `demo_bigquery_contract_query`.
 
 ## Gemini Tool Path
