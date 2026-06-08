@@ -99,10 +99,17 @@ if (-not $SecretExists) {
   Create-SecretNoNewline "fivetran-api-secret" $FivetranApiSecret
 }
 
+# MinInstances keeps one warm instance so the live URL has no cold start during
+# recording and the judging period (2026-06-22 to 2026-07-06). Set MIN_INSTANCES=0
+# after judging to stop paying for an idle instance.
+$MinInstances = $env:MIN_INSTANCES
+if (-not $MinInstances) { $MinInstances = "1" }
+
 & $Gcloud run deploy $ServiceName `
   --source . `
   --region $Region `
   --allow-unauthenticated `
+  --min-instances $MinInstances `
   --set-env-vars "FIVETRAN_CONNECTION_ID=$FivetranConnectionId,BIGQUERY_PROJECT_ID=$BigQueryProjectId,BIGQUERY_DATASET=$BigQueryDataset,BIGQUERY_TABLE=$BigQueryTable,VERTEX_PROJECT_ID=$VertexProjectId,VERTEX_LOCATION=$VertexLocation,VERTEX_MODEL=$VertexModel" `
   --set-secrets "FIVETRAN_API_KEY=fivetran-api-key:latest,FIVETRAN_API_SECRET=fivetran-api-secret:latest"
 
