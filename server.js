@@ -700,6 +700,9 @@ function explainDecision(decision, rules, amount, tier, fivetranEvidence) {
   if (decision === "ALLOW" && rules.includes("conditional_approval_applied")) {
     return `Allowed under scoped human approval: refund amount ${amount} is within the active approval limit for customer_tier=${tier}.`;
   }
+  if (decision === "ALLOW" && rules.includes("stale_sync_supporting_signal")) {
+    return `Allowed with freshness warning: customer_tier=${tier} matches contract ${contract.version}, amount ${amount} is within automatic policy, and the BigQuery _fivetran_synced age exceeded the ${contract.freshness_sla_minutes}-minute contract SLA. TrustGate recorded stale_sync_supporting_signal but did not block this low-risk action.`;
+  }
   if (decision === "ALLOW") {
     return `Allowed: customer_tier=${tier} matches contract ${contract.version}, amount ${amount} is within automatic policy, and Fivetran evidence source=${fivetranEvidence.source}.`;
   }
