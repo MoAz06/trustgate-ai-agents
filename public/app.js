@@ -1,6 +1,6 @@
 (function () {
-  const e = React.createElement;
   const { useEffect, useMemo, useState } = React;
+  const html = htm.bind(React.createElement);
 
   async function api(path, options) {
     const response = await fetch(path, {
@@ -14,10 +14,184 @@
     return payload;
   }
 
-  function badgeClass(decision) {
-    if (decision === "ALLOW") return "badge allow";
-    if (decision === "APPROVAL_REQUIRED") return "badge approval";
-    return "badge block";
+  function toneOf(decision) {
+    if (decision === "ALLOW") return "allow";
+    if (decision === "APPROVAL_REQUIRED") return "approval";
+    return "block";
+  }
+
+  function glyphOf(decision) {
+    if (decision === "ALLOW") return "✓";
+    if (decision === "APPROVAL_REQUIRED") return "!";
+    return "✕";
+  }
+
+  function isLive(source) {
+    return typeof source === "string" && source.endsWith("_rest_live");
+  }
+
+  function cleanAgentAnswer(answer) {
+    return String(answer || "").replace(/\*\*/g, "").replace(/`/g, "").trim();
+  }
+
+  function freshnessLabel(bigquery) {
+    if (!bigquery || bigquery.freshness_minutes === undefined || bigquery.freshness_minutes === null) {
+      return "unknown";
+    }
+    const sla = bigquery.freshness_sla_minutes;
+    const base = `${bigquery.freshness_minutes} min since sync${sla ? ` (SLA ${sla})` : ""}`;
+    return bigquery.freshness_simulated ? `${base} - SIMULATED stale` : base;
+  }
+
+  function summarizeColumns(columns) {
+    if (!columns || !columns.length) return "unknown";
+    const important = ["customer_id", "customer_tier", "refund_amount", "last_order_status", "open_ticket_count"];
+    const present = important.filter((c) => columns.includes(c));
+    if (!present.length) return `${columns.length} columns`;
+    return `${columns.length} columns; key: ${present.join(", ")}`;
+  }
+
+  function Pill({ live, warn, children }) {
+    const cls = "pill" + (live ? " live" : "") + (warn ? " warnpill" : "");
+    return html`<span className=${cls}><span className="dot"></span>${children}</span>`;
+  }
+
+  function Kv({ k, v, mono, tone }) {
+    const cls = "kv-val" + (mono ? " mono" : "") + (tone ? ` ${tone}` : "");
+    return html`<div className="kv"><span className="kv-key">${k}</span><span className=${cls}>${v === undefined || v === null || v === "" ? "unknown" : v}</span></div>`;
+  }
+
+  function Card({ title, children }) {
+    return html`<div className="card"><div className="card-title">${title}</div>${children}</div>`;
+  }
+
+  function Trace({ decision }) {
+    const ev = decision.evidence;
+    const ftLive = isLive(ev.fivetran.source);
+    const bqLive = isLive(ev.bigquery.source);
+    const tone = toneOf(decision.decision);
+    const steps = [
+      { n: 1, label: "Agent proposed", sub: `${ev.contract.amount ? "$" + ev.contract.amount : "action"} / ${decision.agent_id || "agent"}`, cls: "ok" },
+      { n: 2, label: "Fivetran", sub: ftLive ? "fivetran_rest_live" : ev.fivetran.source, cls: ftLive ? "ok" : "warn" },
+      { n: 3, label: "BigQuery", sub: bqLive ? "bigquery_rest_live" : ev.bigquery.source, cls: bqLive ? "ok" : "warn" },
+      { n: 4, label: "Policy decided", sub: `${decision.decision} / ${decision.risk_score} pts`, cls: tone === "allow" ? "ok" : tone === "approval" ? "warn" : "bad" }
+    ];
+    return html`
+      <div className="trace">
+        ${steps.map((s) => html`
+          <div key=${s.n} className=${"trace-step " + s.cls}>
+            <div className="step-head">
+              <span className="step-num">${s.n}</span>
+              <span className="step-label">${s.label}</span>
+            </div>
+            <span className="step-sub">${s.sub}</span>
+          </div>`)}
+      </div>`;
+  }
+
+  function Banner({ decision }) {
+    const tone = toneOf(decision.decision);
+    const ev = decision.evidence;
+    return html`
+      <div className=${"banner " + tone}>
+        <div className="banner-top">
+          <div className="banner-status">
+            <span className="glyph">${glyphOf(decision.decision)}</span>
+            ${decision.decision}
+          </div>
+          <span className="banner-action">Approve refund · $${ev.contract.amount} · ${ev.bigquery.customer_id || "C-1042"}</span>
+        </div>
+        <p className="banner-reason">${decision.explanation}</p>
+        <div className="banner-meta">
+          <span><b>Receipt</b> <span className="mono">${decision.decision_id}</span></span>
+          <span><b>Contract</b> ${decision.contract_version}</span>
+          <span><b>Policy</b> ${decision.policy_version}</span>
+          <span><b>Tier</b> ${ev.bigquery.customer_tier}</span>
+        </div>
+      </div>`;
+  }
+
+  function DecisionDetail({ decision, onApprove, busy, devView, setDevView }) {
+    const ev = decision.evidence;
+    const breakdown = decision.risk_breakdown && decision.risk_breakdown.length
+      ? decision.risk_breakdown
+      : [{ rule: "none", points: 0 }];
+    return html`
+      <div className="stack">
+        <${Banner} decision=${decision} />
+        <${Trace} decision=${decision} />
+
+        <div className="cards-grid">
+          <${Card} title="Fivetran REST evidence">
+            <${Kv} k="connection" v=${ev.fivetran.connection_id} mono=${true} />
+            <${Kv} k="source" v=${ev.fivetran.source} mono=${true} tone=${isLive(ev.fivetran.source) ? "good" : ""} />
+            <${Kv} k="sync state" v=${ev.fivetran.sync_state_summary} />
+            <${Kv} k="schema change" v=${String(!!ev.fivetran.schema_change_detected)} tone=${ev.fivetran.schema_change_detected ? "warnv" : ""} />
+            <${Kv} k="schema hash" v=${ev.fivetran.schema_config_hash} mono=${true} />
+          <//>
+          <${Card} title="BigQuery row evidence">
+            <${Kv} k="source" v=${ev.bigquery.source} mono=${true} tone=${isLive(ev.bigquery.source) ? "good" : ""} />
+            <${Kv} k="row tier" v=${ev.bigquery.customer_tier} mono=${true} />
+            <${Kv} k="row amount" v=${ev.bigquery.refund_amount ? "$" + ev.bigquery.refund_amount : "unknown"} />
+            <${Kv} k="freshness" v=${freshnessLabel(ev.bigquery)} tone=${ev.bigquery.freshness_simulated ? "warnv" : ""} />
+            <${Kv} k="columns" v=${summarizeColumns(ev.bigquery.available_columns)} />
+          <//>
+          <${Card} title="Contract diff">
+            <${Kv} k="allowed tiers" v=${(ev.contract.allowed_customer_tiers || []).join(", ")} />
+            <${Kv} k="observed" v=${ev.contract.observed_customer_tier} mono=${true} tone=${(ev.contract.allowed_customer_tiers || []).includes(ev.contract.observed_customer_tier) ? "good" : "warnv"} />
+            <${Kv} k="amount" v=${"$" + ev.contract.amount} />
+            <${Kv} k="version" v=${decision.contract_version} />
+          <//>
+          <${Card} title=${`Risk breakdown · ${decision.risk_score} pts`}>
+            ${breakdown.map((item, i) => html`
+              <div key=${i} className=${"kv risk-row" + (item.points ? "" : " zero")}>
+                <span className="kv-key mono">${item.rule}</span>
+                <span className="kv-val">${item.points} pts</span>
+              </div>`)}
+          <//>
+        </div>
+
+        ${decision.decision === "APPROVAL_REQUIRED"
+          ? html`<div className="receipt-actions">
+              <button className="primary" disabled=${busy} onClick=${() => onApprove(decision)}>Conditional approve under $50</button>
+            </div>`
+          : null}
+
+        <div className="dev-toggle">
+          <button className="ghost tiny" onClick=${() => setDevView(!devView)}>
+            ${devView ? "Hide developer view" : "Show developer view (raw receipt)"}
+          </button>
+        </div>
+        ${devView ? html`<pre>${JSON.stringify(decision, null, 2)}</pre>` : null}
+        ${devView && decision.human_approval ? html`<pre>${JSON.stringify(decision.human_approval, null, 2)}</pre>` : null}
+      </div>`;
+  }
+
+  function AgentRunDetail({ agentRun }) {
+    const r = agentRun.trustgate_receipt;
+    const sent = agentRun.function_call_sent_to_trustgate;
+    return html`
+      <div className="stack">
+        <div className="cards-grid">
+          <${Card} title="Gemini function call">
+            <${Kv} k="model" v=${agentRun.model} mono=${true} />
+            <${Kv} k="tool" v=${agentRun.function_call_requested.name} mono=${true} />
+            <${Kv} k="customer" v=${sent.customer_id} mono=${true} />
+            <${Kv} k="amount" v=${"$" + sent.amount} />
+            <${Kv} k="reason" v=${sent.reason} />
+          <//>
+          <${Card} title="TrustGate evidence passed back">
+            <${Kv} k="decision" v=${r.decision} tone=${toneOf(r.decision) === "allow" ? "good" : "warnv"} />
+            <${Kv} k="receipt" v=${r.decision_id} mono=${true} />
+            <${Kv} k="Fivetran" v=${r.evidence.fivetran.source} mono=${true} tone=${isLive(r.evidence.fivetran.source) ? "good" : ""} />
+            <${Kv} k="BigQuery" v=${r.evidence.bigquery.source} mono=${true} tone=${isLive(r.evidence.bigquery.source) ? "good" : ""} />
+          <//>
+        </div>
+        <div>
+          <div className="subtle-label">Gemini final answer</div>
+          <p className="agent-answer">${cleanAgentAnswer(agentRun.final_answer) || "Gemini returned no text."}</p>
+        </div>
+      </div>`;
   }
 
   function App() {
@@ -29,13 +203,16 @@
     const [agentRun, setAgentRun] = useState(null);
     const [busy, setBusy] = useState(false);
     const [error, setError] = useState("");
+    const [devView, setDevView] = useState(false);
 
     const selected = useMemo(
       () => decisions.find((item) => item.decision_id === selectedId) || decisions[0],
       [decisions, selectedId]
     );
-    const fivetranLive = selected && selected.evidence.fivetran.source === "fivetran_rest_live";
-    const bigQueryLive = selected && selected.evidence.bigquery.source === "bigquery_rest_live";
+
+    const ftSource = selected && selected.evidence.fivetran.source;
+    const bqSource = selected && selected.evidence.bigquery.source;
+    const approvalActive = Boolean(activeApproval || (state && state.activeApproval));
 
     async function refresh() {
       const [decisionPayload, statePayload] = await Promise.all([
@@ -142,284 +319,98 @@
       refresh().catch((err) => setError(err.message));
     }, []);
 
-    return e("div", { className: "app" },
-      e("header", { className: "topbar" },
-        e("div", { className: "brand" },
-          e("div", { className: "mark" }, "TG"),
-          e("div", null, "TrustGate for AI Agents")
-        ),
-        e("div", { className: "status-strip" },
-          e("span", null, agentRun ? `Gemini: ${agentRun.model}` : "Gemini: 3.5 Flash"),
-          e("span", null, "|"),
-          e("span", null, selected ? `Fivetran: ${fivetranLive ? "live" : selected.evidence.fivetran.source}` : "Fivetran: waiting"),
-          e("span", null, "|"),
-          e("span", null, selected ? `BigQuery: ${bigQueryLive ? "live" : selected.evidence.bigquery.source}` : "BigQuery: waiting"),
-          e("span", null, "|"),
-          e("span", null, "Policy: deterministic"),
-          e("span", null, "|"),
-          e("span", null, activeApproval || (state && state.activeApproval) ? "Scoped approval active" : "No scoped approval")
-        )
-      ),
-      e("main", { className: "layout" },
-        e("aside", { className: "panel" },
-          e("div", { className: "panel-header" }, e("h2", null, "Action Console")),
-          e("div", { className: "panel-body stack" },
-            e("label", { className: "field" },
-              e("span", null, "Refund amount"),
-              e("input", {
-                type: "number",
-                value: amount,
-                min: 1,
-                onChange: (event) => setAmount(event.target.value)
-              })
-            ),
-            e("div", { className: "button-grid" },
-              e("button", {
-                className: "primary",
-                disabled: busy,
-                onClick: () => runAgent(Number(amount) > 100 ? "service_failure" : "late_delivery", { amount })
-              }, "Run Gemini agent"),
-              e("button", {
-                disabled: busy,
-                onClick: () => run("late_delivery", { amount })
-              }, "Run policy only"),
-              e("button", {
-                className: "warn",
-                disabled: busy,
-                onClick: () => mutate("/api/demo/inject-enum-drift")
-              }, "Simulate new customer tier"),
-              e("button", {
-                disabled: busy,
-                onClick: () => mutate("/api/demo/inject-stale-sync")
-              }, "Simulate stale sync"),
-              e("button", {
-                className: "danger",
-                disabled: busy,
-                onClick: () => mutate("/api/demo/inject-critical-failure")
-              }, "Simulate schema failure"),
-              e("button", {
-                disabled: busy,
-                onClick: () => mutate("/api/demo/reset")
-              }, "Reset demo")
-            ),
-            error ? e("div", { className: "badge block" }, error) : null
-          )
-        ),
-        e("section", { className: "main-grid" },
-          e("div", { className: "panel" },
-            e("div", { className: "panel-header" },
-              e("h2", null, "Decision Detail"),
-              selected ? e("span", { className: badgeClass(selected.decision) }, selected.decision) : null
-            ),
-            e("div", { className: "panel-body" },
-              selected ? e(DecisionDetail, { decision: selected, onApprove: approve, busy }) : e("div", { className: "empty" }, "No receipt selected yet. New decisions will show policy, Fivetran, BigQuery, and contract evidence here.")
-            )
-          ),
-          e("div", { className: "panel" },
-            e("div", { className: "panel-header" }, e("h2", null, "Gemini Agent Run")),
-            e("div", { className: "panel-body" },
-              agentRun ? e(AgentRunDetail, { agentRun }) : e("div", { className: "empty" }, "No Gemini run yet. The agent trace will show the tool request, TrustGate receipt, and final explanation.")
-            )
-          ),
-          e("div", { className: "panel" },
-            e("div", { className: "panel-header" }, e("h2", null, "Audit Receipt JSON")),
-            e("div", { className: "panel-body" },
-              selected ? e("pre", null, JSON.stringify(selected, null, 2)) : e("pre", null, "{}")
-            )
-          )
-        ),
-        e("aside", { className: "panel right-rail" },
-          e("div", { className: "panel-header" }, e("h2", null, "Action Queue")),
-          e("div", { className: "panel-body decision-list" },
-            decisions.length
-              ? decisions.map((decision) => e("button", {
-                key: decision.decision_id,
-                className: `decision-item ${decision.decision_id === (selected && selected.decision_id) ? "active" : ""}`,
-                onClick: () => setSelectedId(decision.decision_id)
-              },
-                e("div", { className: "meta-row" },
-                  e("span", { className: badgeClass(decision.decision) }, decision.decision),
-                  e("span", { className: "muted" }, `${decision.risk_score} rule points`)
-                ),
-                e("div", null, decision.evidence.contract.observed_customer_tier),
-                e("small", { className: "muted" }, new Date(decision.created_at).toLocaleString())
-              ))
-              : e("div", { className: "empty" }, "Receipts will appear here after each proposed action.")
-          )
-        )
-      )
-    );
+    return html`
+      <div className="app">
+        <header className="topbar">
+          <div className="brand">
+            <div className="mark">TG</div>
+            <div>
+              <div className="brand-name">TrustGate</div>
+              <div className="brand-sub">Runtime authorization for AI-agent actions</div>
+            </div>
+          </div>
+          <div className="status-strip">
+            <${Pill}>${agentRun ? agentRun.model : "gemini-3.5-flash"}<//>
+            <${Pill} live=${isLive(ftSource)}>Fivetran ${selected ? (isLive(ftSource) ? "live" : ftSource) : "ready"}<//>
+            <${Pill} live=${isLive(bqSource)}>BigQuery ${selected ? (isLive(bqSource) ? "live" : bqSource) : "ready"}<//>
+            <${Pill}>Policy deterministic<//>
+            <${Pill} warn=${approvalActive}>${approvalActive ? "Scoped approval active" : "No scoped approval"}<//>
+          </div>
+        </header>
+
+        <main className="layout">
+          <aside className="panel">
+            <div className="panel-header"><h2 className="panel-title">Action Console</h2></div>
+            <div className="panel-body stack">
+              <label className="field">
+                <span>Refund amount (USD)</span>
+                <input type="number" value=${amount} min="1" onChange=${(e) => setAmount(e.target.value)} />
+              </label>
+              <div className="button-grid">
+                <button className="primary" disabled=${busy} onClick=${() => runAgent(Number(amount) > 100 ? "service_failure" : "late_delivery", { amount })}>Run Gemini agent</button>
+                <button disabled=${busy} onClick=${() => run("late_delivery", { amount })}>Run policy only</button>
+              </div>
+              <div className="group-label">Simulate data-supply-chain events</div>
+              <div className="button-grid">
+                <button className="warn" disabled=${busy} onClick=${() => mutate("/api/demo/inject-enum-drift")}>Simulate new customer tier</button>
+                <button disabled=${busy} onClick=${() => mutate("/api/demo/inject-stale-sync")}>Simulate stale sync</button>
+                <button className="danger" disabled=${busy} onClick=${() => mutate("/api/demo/inject-critical-failure")}>Simulate schema failure</button>
+                <button disabled=${busy} onClick=${() => mutate("/api/demo/reset")}>Reset demo</button>
+              </div>
+              ${busy ? html`<div className="busy-tag"><span className="spinner"></span> Evaluating policy…</div>` : null}
+              ${error ? html`<div className="error-banner">${error}</div>` : null}
+              <div className="legend">
+                <div className="legend-row"><span className="dot allow"></span> ALLOW — data is trusted, action proceeds</div>
+                <div className="legend-row"><span className="dot approval"></span> APPROVAL_REQUIRED — routed to a human</div>
+                <div className="legend-row"><span className="dot block"></span> BLOCK — broken supply chain, action stopped</div>
+              </div>
+            </div>
+          </aside>
+
+          <section className="col">
+            <div className="panel">
+              <div className="panel-header">
+                <h2 className="panel-title">Decision</h2>
+                ${busy ? html`<span className="busy-tag"><span className="spinner"></span> evaluating</span>` : null}
+              </div>
+              <div className="panel-body">
+                ${selected
+                  ? html`<${DecisionDetail} decision=${selected} onApprove=${approve} busy=${busy} devView=${devView} setDevView=${setDevView} />`
+                  : html`<div className="empty"><h3>No decision yet</h3><div>Set a refund amount and run the Gemini agent. The decision, evidence trace, and receipt appear here.</div></div>`}
+              </div>
+            </div>
+
+            <div className="panel">
+              <div className="panel-header"><h2 className="panel-title">Gemini Agent Run</h2></div>
+              <div className="panel-body">
+                ${agentRun
+                  ? html`<${AgentRunDetail} agentRun=${agentRun} />`
+                  : html`<div className="empty"><h3>No Gemini run yet</h3><div>Run the agent to see the tool call, the TrustGate receipt it received, and Gemini's explanation.</div></div>`}
+              </div>
+            </div>
+          </section>
+
+          <aside className="panel right-rail">
+            <div className="panel-header"><h2 className="panel-title">Decision History</h2></div>
+            <div className="panel-body">
+              <div className="queue">
+                ${decisions.length
+                  ? decisions.map((d) => html`
+                      <button key=${d.decision_id} className=${"queue-item" + (selected && d.decision_id === selected.decision_id ? " active" : "")} onClick=${() => setSelectedId(d.decision_id)}>
+                        <div className="row1">
+                          <span className=${"badge " + toneOf(d.decision)}>${d.decision}</span>
+                          <span className="pts">${d.risk_score} pts</span>
+                        </div>
+                        <span className="tier">${d.evidence.contract.observed_customer_tier} · $${d.evidence.contract.amount}</span>
+                        <span className="ts">${new Date(d.created_at).toLocaleTimeString()}</span>
+                      </button>`)
+                  : html`<div className="empty"><div>Receipts appear here after each action.</div></div>`}
+              </div>
+            </div>
+          </aside>
+        </main>
+      </div>`;
   }
 
-  function DecisionDetail({ decision, onApprove, busy }) {
-    const evidence = decision.evidence;
-    return e("div", { className: "hero-decision" },
-      e("div", { className: "decision-title" },
-        e("h1", null, "Approve refund"),
-        e("span", { className: badgeClass(decision.decision) }, decision.decision)
-      ),
-      e("p", { className: "muted" }, decision.explanation),
-      e("div", { className: "metric-grid" },
-        e(Metric, { label: "Customer tier", value: evidence.contract.observed_customer_tier }),
-        e(Metric, { label: "Rule score", value: `${decision.risk_score} rule points` }),
-        e(Metric, { label: "Fivetran source", value: evidence.fivetran.source }),
-        e(Metric, { label: "BigQuery source", value: evidence.bigquery.source })
-      ),
-      e("div", { className: "evidence-grid" },
-        e(EvidenceBox, {
-          title: "Fivetran REST Evidence",
-          rows: [
-            ["connection", evidence.fivetran.connection_id],
-            ["sync", evidence.fivetran.sync_state_summary],
-            ["schema hash", evidence.fivetran.schema_config_hash],
-            ["schema status", schemaStatusLabel(evidence.fivetran)],
-            ["schema handling", evidence.fivetran.schema_change_handling],
-            ["API refs", summarizeRefs(evidence.fivetran.raw_refs)]
-          ]
-        }),
-        e(EvidenceBox, {
-          title: "BigQuery Row Evidence",
-          rows: [
-            ["source", evidence.bigquery.source],
-            ["table", evidence.bigquery.table],
-            ["row tier", evidence.bigquery.customer_tier],
-            ["row amount", evidence.bigquery.refund_amount ? `$${evidence.bigquery.refund_amount}` : "unknown"],
-            ["selected by", evidence.bigquery.selected_by],
-            ["freshness", freshnessLabel(evidence.bigquery)],
-            ["columns", summarizeColumns(evidence.bigquery.available_columns)],
-            ["warning", evidence.bigquery.mapping_warning || "none"]
-          ]
-        })
-      ),
-      e("div", { className: "evidence-grid" },
-        e(EvidenceBox, {
-          title: "Contract Diff",
-          rows: [
-            ["allowed", evidence.contract.allowed_customer_tiers.join(", ")],
-            ["observed", evidence.contract.observed_customer_tier],
-            ["amount", `$${evidence.contract.amount}`],
-            ["version", decision.contract_version]
-          ]
-        }),
-        e(EvidenceBox, {
-          title: "Risk Breakdown",
-          rows: decision.risk_breakdown.length
-            ? decision.risk_breakdown.map((item) => [item.rule, `${item.points} points`])
-            : [["none", "0 points"]]
-        }),
-        e(EvidenceBox, {
-          title: "Policy Result",
-          rows: [
-            ["decision", decision.decision],
-            ["policy", decision.policy_version],
-            ["approval applied", String(decision.approval_applied)]
-          ]
-        })
-      ),
-      decision.decision === "APPROVAL_REQUIRED"
-        ? e("div", { className: "receipt-actions" },
-          e("button", { className: "primary", disabled: busy, onClick: () => onApprove(decision) }, "Conditional approve under $50")
-        )
-        : null,
-      decision.human_approval
-        ? e("pre", null, JSON.stringify(decision.human_approval, null, 2))
-        : null
-    );
-  }
-
-  function AgentRunDetail({ agentRun }) {
-    return e("div", { className: "stack" },
-      e("div", { className: "metric-grid" },
-        e(Metric, { label: "Model", value: agentRun.model }),
-        e(Metric, { label: "Tool requested", value: agentRun.function_call_requested.name }),
-        e(Metric, { label: "TrustGate decision", value: agentRun.trustgate_receipt.decision }),
-        e(Metric, { label: "Auth source", value: agentRun.auth_source })
-      ),
-      e("div", { className: "evidence-grid" },
-        e(EvidenceBox, {
-          title: "Gemini Function Call",
-          rows: [
-            ["agent_id", agentRun.function_call_sent_to_trustgate.agent_id],
-            ["action", agentRun.function_call_sent_to_trustgate.action_type],
-            ["customer", agentRun.function_call_sent_to_trustgate.customer_id],
-            ["amount", `$${agentRun.function_call_sent_to_trustgate.amount}`],
-            ["reason", agentRun.function_call_sent_to_trustgate.reason]
-          ]
-        }),
-        e(EvidenceBox, {
-          title: "TrustGate Evidence Passed Back",
-          rows: [
-            ["receipt", agentRun.trustgate_receipt.decision_id],
-            ["Fivetran", agentRun.trustgate_receipt.evidence.fivetran.source],
-            ["BigQuery", agentRun.trustgate_receipt.evidence.bigquery.source],
-            ["rule score", `${agentRun.trustgate_receipt.risk_score} points`]
-          ]
-        })
-      ),
-      e("div", { className: "metric" },
-        e("div", { className: "label" }, "Gemini Final Answer"),
-        e("p", { className: "agent-answer" }, cleanAgentAnswer(agentRun.final_answer) || "Gemini returned no text.")
-      )
-    );
-  }
-
-  function cleanAgentAnswer(answer) {
-    return String(answer || "")
-      .replace(/\*\*/g, "")
-      .replace(/`/g, "")
-      .trim();
-  }
-
-  function schemaStatusLabel(fivetran) {
-    if (fivetran.source !== "fivetran_rest_live") {
-      return "demo schema signal";
-    }
-    return "config captured from REST";
-  }
-
-  function summarizeRefs(refs) {
-    if (!refs || !refs.length) return "unknown";
-    return `${refs.length} Fivetran REST endpoints`;
-  }
-
-  function freshnessLabel(bigquery) {
-    if (!bigquery || bigquery.freshness_minutes === undefined || bigquery.freshness_minutes === null) {
-      return "unknown";
-    }
-    const sla = bigquery.freshness_sla_minutes;
-    const base = `${bigquery.freshness_minutes} min since Fivetran sync${sla ? ` (SLA ${sla})` : ""}`;
-    if (bigquery.freshness_simulated) {
-      return `${base} — SIMULATED stale`;
-    }
-    return base;
-  }
-
-  function summarizeColumns(columns) {
-    if (!columns || !columns.length) return "unknown";
-    const important = ["customer_id", "customer_tier", "refund_amount", "last_order_status", "open_ticket_count"];
-    const present = important.filter((column) => columns.includes(column));
-    if (!present.length) return `${columns.length} columns`;
-    return `${columns.length} columns; key fields: ${present.join(", ")}`;
-  }
-
-  function Metric({ label, value }) {
-    return e("div", { className: "metric" },
-      e("div", { className: "label" }, label),
-      e("div", { className: "value" }, value || "unknown")
-    );
-  }
-
-  function EvidenceBox({ title, rows }) {
-    return e("div", { className: "metric" },
-      e("div", { className: "label" }, title),
-      e("div", { className: "stack", style: { marginTop: 8 } },
-        rows.map(([key, value]) => e("div", { key, className: "meta-row" },
-          e("span", { className: "muted" }, key),
-          e("strong", null, value || "unknown")
-        ))
-      )
-    );
-  }
-
-  ReactDOM.createRoot(document.getElementById("root")).render(e(App));
+  ReactDOM.createRoot(document.getElementById("root")).render(html`<${App} />`);
 })();
