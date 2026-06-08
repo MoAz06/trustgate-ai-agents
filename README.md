@@ -162,6 +162,18 @@ I am not calling this production-ready. The current build proves the runtime dec
 - Add CI with syntax checks, policy tests, and secret scanning before every push.
 - Replace the public demo reset/inject routes with a separate demo mode flag.
 
+## Product Path
+
+The hackathon version proves one refund authorization loop. The product version would become an action gateway for agents:
+
+1. Authenticated agent identity on every proposed action.
+2. Immutable audit receipts with replayable evidence, policy version, and contract version.
+3. Versioned input contracts with policy tests before a contract can go live.
+4. Enterprise approval workflow with approver identity, expiry, and scoped exceptions.
+5. Multi-action support for refunds, discounts, account changes, invoice adjustments, and access changes.
+
+That is the gap between this prototype and a product I would trust in a real business workflow.
+
 ## Claims I Am Not Making
 
 - I am not claiming this is production-ready.
