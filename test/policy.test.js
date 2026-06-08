@@ -148,6 +148,27 @@ test("applies a scoped approval under $50 and keeps larger refunds gated", () =>
   assert.deepEqual(rules(largeRefund), ["unseen_customer_tier_enum", "high_refund_amount"]);
 });
 
+test("flags a stale Fivetran sync from the BigQuery freshness signal", () => {
+  resetDemoState();
+  const staleRow = liveBigQuery({ freshness_minutes: 42, freshness_sla_minutes: 15 });
+
+  const receipt = decide(refundAction(), liveFivetran(), staleRow);
+
+  assert.equal(receipt.decision, "ALLOW");
+  assert.ok(rules(receipt).includes("stale_sync_supporting_signal"));
+  assert.equal(receipt.risk_score, 10);
+});
+
+test("does not flag freshness when the BigQuery sync age is within SLA", () => {
+  resetDemoState();
+  const freshRow = liveBigQuery({ freshness_minutes: 5, freshness_sla_minutes: 15 });
+
+  const receipt = decide(refundAction(), liveFivetran(), freshRow);
+
+  assert.equal(receipt.decision, "ALLOW");
+  assert.deepEqual(rules(receipt), []);
+});
+
 test("blocks when a critical schema failure is injected", () => {
   resetDemoState();
   demoState.criticalFailure = true;
