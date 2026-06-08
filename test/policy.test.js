@@ -1,4 +1,6 @@
 process.env.TRUSTGATE_SKIP_DOTENV = "1";
+// Pin the freshness SLA so the freshness tests are independent of the default.
+process.env.FRESHNESS_SLA_MINUTES = "15";
 
 const test = require("node:test");
 const assert = require("node:assert/strict");
