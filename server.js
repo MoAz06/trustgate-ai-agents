@@ -2,6 +2,7 @@ const http = require("http");
 const fs = require("fs");
 const path = require("path");
 const crypto = require("crypto");
+const { spawn } = require("child_process");
 
 const PORT = Number(process.env.PORT || 8080);
 const PUBLIC_DIR = path.join(__dirname, "public");
@@ -350,6 +351,214 @@ async function getFivetranEvidence() {
   };
 }
 
+function fivetranMcpConfig() {
+  const args = process.env.FIVETRAN_MCP_ARGS ? process.env.FIVETRAN_MCP_ARGS.split(" ").filter(Boolean) : [];
+  const scriptArg = args.find((a) => a.endsWith(".py"));
+  // The Fivetran MCP server resolves schema_file paths relative to its own dir,
+  // so run it from there instead of the Node working directory.
+  const cwd = process.env.FIVETRAN_MCP_CWD || (scriptArg ? path.dirname(scriptArg) : undefined);
+  return {
+    command: process.env.FIVETRAN_MCP_CMD || "fivetran-mcp",
+    args,
+    cwd,
+    disabled: process.env.FIVETRAN_MCP_DISABLED === "1",
+    timeoutMs: Number(process.env.FIVETRAN_MCP_TIMEOUT_MS) > 0 ? Number(process.env.FIVETRAN_MCP_TIMEOUT_MS) : 20000
+  };
+}
+
+const FIVETRAN_MCP_SCHEMAS = {
+  listConnections: "open-api-definitions/connections/list_connections.json",
+  connectionDetails: "open-api-definitions/connections/connection_details.json"
+};
+
+// Long-lived stdio MCP client for the official Fivetran MCP server.
+// Spawned once, reused for each tools/call. Resets and respawns on exit.
+const fivetranMcp = createStdioMcpClient();
+
+function createStdioMcpClient() {
+  let proc = null;
+  let ready = null;
+  let buffer = "";
+  let nextId = 1;
+  const pending = new Map();
+
+  function reset(error) {
+    if (proc) {
+      try { proc.kill(); } catch (_) { /* ignore */ }
+    }
+    proc = null;
+    ready = null;
+    buffer = "";
+    for (const [, p] of pending) p.reject(error || new Error("fivetran mcp closed"));
+    pending.clear();
+  }
+
+  function send(message) {
+    if (!proc || !proc.stdin.writable) throw new Error("fivetran mcp not running");
+    proc.stdin.write(JSON.stringify(message) + "\n");
+  }
+
+  function request(method, params) {
+    const id = nextId++;
+    return new Promise((resolve, reject) => {
+      pending.set(id, { resolve, reject });
+      try {
+        send({ jsonrpc: "2.0", id, method, params });
+      } catch (error) {
+        pending.delete(id);
+        reject(error);
+      }
+    });
+  }
+
+  function onLine(line) {
+    const trimmed = line.trim();
+    if (!trimmed) return;
+    let message;
+    try {
+      message = JSON.parse(trimmed);
+    } catch (_) {
+      return;
+    }
+    if (message.id !== undefined && pending.has(message.id)) {
+      const p = pending.get(message.id);
+      pending.delete(message.id);
+      if (message.error) p.reject(new Error(message.error.message || "mcp error"));
+      else p.resolve(message.result);
+    }
+  }
+
+  function start() {
+    const cfg = fivetranMcpConfig();
+    proc = spawn(cfg.command, cfg.args, {
+      cwd: cfg.cwd,
+      env: { ...process.env, FIVETRAN_ALLOW_WRITES: process.env.FIVETRAN_ALLOW_WRITES || "false" },
+      stdio: ["pipe", "pipe", "pipe"]
+    });
+    proc.stdout.setEncoding("utf8");
+    proc.stdout.on("data", (chunk) => {
+      buffer += chunk;
+      let index;
+      while ((index = buffer.indexOf("\n")) >= 0) {
+        const line = buffer.slice(0, index);
+        buffer = buffer.slice(index + 1);
+        onLine(line);
+      }
+    });
+    proc.stderr.on("data", () => {
+      // Drain stderr so the MCP subprocess cannot block on verbose logs.
+    });
+    proc.on("error", (error) => reset(error));
+    proc.on("exit", () => reset(new Error("fivetran mcp exited")));
+  }
+
+  function ensureReady() {
+    if (ready) return ready;
+    const cfg = fivetranMcpConfig();
+    ready = (async () => {
+      start();
+      await withTimeout(request("initialize", {
+        protocolVersion: "2024-11-05",
+        capabilities: {},
+        clientInfo: { name: "trustgate", version: "0.1.0" }
+      }), cfg.timeoutMs, "fivetran mcp initialize");
+      try {
+        send({ jsonrpc: "2.0", method: "notifications/initialized" });
+      } catch (_) { /* ignore */ }
+      return true;
+    })().catch((error) => {
+      reset(error);
+      throw error;
+    });
+    return ready;
+  }
+
+  async function callTool(name, args) {
+    await ensureReady();
+    return request("tools/call", { name, arguments: args || {} });
+  }
+
+  return { callTool };
+}
+
+function withTimeout(promise, ms, label) {
+  return new Promise((resolve, reject) => {
+    const timer = setTimeout(() => reject(new Error(`${label} timed out after ${ms}ms`)), ms);
+    promise.then(
+      (value) => { clearTimeout(timer); resolve(value); },
+      (error) => { clearTimeout(timer); reject(error); }
+    );
+  });
+}
+
+function mcpResultText(result) {
+  if (!result) return "";
+  if (Array.isArray(result.content)) {
+    return result.content.map((part) => (part && part.type === "text" ? part.text : "")).join("\n");
+  }
+  if (result.structuredContent) return JSON.stringify(result.structuredContent);
+  return JSON.stringify(result);
+}
+
+function parseMcpJsonResult(result) {
+  const text = mcpResultText(result);
+  if (!text) return { text: "", json: null };
+  try {
+    return { text, json: JSON.parse(text) };
+  } catch (_) {
+    return { text, json: null };
+  }
+}
+
+function findFivetranConnection(payload, connectionId) {
+  const items = payload && payload.data && Array.isArray(payload.data.items) ? payload.data.items : [];
+  return items.find((item) => item.id === connectionId || item.connection_id === connectionId) || null;
+}
+
+async function getFivetranMcpEvidence(timeoutMs) {
+  const cfg = fivetranMcpConfig();
+  if (cfg.disabled) return { source: "fivetran_mcp_disabled" };
+  if (!process.env.FIVETRAN_API_KEY || !process.env.FIVETRAN_API_SECRET) {
+    return { source: "fivetran_mcp_unavailable", reason: "no_fivetran_credentials" };
+  }
+  const connectionId = process.env.FIVETRAN_CONNECTION_ID || "fulfill_pageant";
+  try {
+    const result = await withTimeout(
+      fivetranMcp.callTool("list_connections", { schema_file: FIVETRAN_MCP_SCHEMAS.listConnections }),
+      timeoutMs || cfg.timeoutMs,
+      "fivetran mcp list_connections"
+    );
+    const parsed = parseMcpJsonResult(result);
+    const targetConnection = findFivetranConnection(parsed.json, connectionId);
+    let detailsVerified = false;
+    if (targetConnection) {
+      const details = await withTimeout(
+        fivetranMcp.callTool("get_connection_details", {
+          schema_file: FIVETRAN_MCP_SCHEMAS.connectionDetails,
+          connection_id: connectionId
+        }),
+        Math.min(timeoutMs || cfg.timeoutMs, 4000),
+        "fivetran mcp get_connection_details"
+      );
+      detailsVerified = Boolean(parseMcpJsonResult(details).json);
+    }
+    return {
+      source: "fivetran_mcp_live",
+      server: "github.com/fivetran/fivetran-mcp",
+      transport: "stdio",
+      tools: detailsVerified ? ["list_connections", "get_connection_details"] : ["list_connections"],
+      target_connection: connectionId,
+      target_connection_present: Boolean(targetConnection) || (typeof parsed.text === "string" && parsed.text.includes(connectionId)),
+      target_connection_service: targetConnection ? targetConnection.service : undefined,
+      details_verified: detailsVerified,
+      connection_count: parsed.json && parsed.json.data && Array.isArray(parsed.json.data.items) ? parsed.json.data.items.length : undefined,
+      response_chars: typeof parsed.text === "string" ? parsed.text.length : 0
+    };
+  } catch (error) {
+    return { source: "fivetran_mcp_unavailable", error: error.message };
+  }
+}
+
 function demoBigQueryEvidence(action, customerTier, error) {
   return {
     source: "demo_bigquery_contract_query",
@@ -582,9 +791,14 @@ function actionFromBody(body) {
 }
 
 async function evaluateAction(action) {
-  const fivetranEvidence = await getFivetranEvidence();
-  const bigQueryEvidence = await getBigQueryEvidence(action);
-  return decide(action, fivetranEvidence, bigQueryEvidence);
+  const [fivetranEvidence, bigQueryEvidence, fivetranMcpEvidence] = await Promise.all([
+    getFivetranEvidence(),
+    getBigQueryEvidence(action),
+    getFivetranMcpEvidence(4000).catch((error) => ({ source: "fivetran_mcp_unavailable", error: error.message }))
+  ]);
+  const receipt = decide(action, fivetranEvidence, bigQueryEvidence);
+  receipt.evidence.fivetran_mcp = fivetranMcpEvidence;
+  return receipt;
 }
 
 function applicableApproval(action, bigqueryEvidence) {
@@ -1293,6 +1507,11 @@ async function router(req, res) {
     return;
   }
 
+  if (req.method === "GET" && pathname === "/api/fivetran/mcp-evidence") {
+    json(res, 200, await getFivetranMcpEvidence());
+    return;
+  }
+
   if (req.method === "GET" && pathname === "/api/bigquery/evidence") {
     const action = {
       customer_id: url.searchParams.get("customer_id") || "C-1042",
@@ -1372,6 +1591,8 @@ function startServer() {
   server.listen(PORT, () => {
     logStartupConfig();
     console.log(`TrustGate listening on http://localhost:${PORT}`);
+    // Warm the Fivetran MCP process so the first decision is not slow.
+    getFivetranMcpEvidence().catch(() => {});
   });
 }
 
@@ -1390,5 +1611,6 @@ module.exports = {
   server,
   startServer,
   mcpToolDefinitions,
-  handleMcpMessage
+  handleMcpMessage,
+  getFivetranMcpEvidence
 };

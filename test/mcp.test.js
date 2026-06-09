@@ -1,4 +1,6 @@
 process.env.TRUSTGATE_SKIP_DOTENV = "1";
+// Keep the Fivetran MCP subprocess out of the test run.
+process.env.FIVETRAN_MCP_DISABLED = "1";
 
 const test = require("node:test");
 const assert = require("node:assert/strict");
@@ -6,8 +8,14 @@ const assert = require("node:assert/strict");
 const {
   resetDemoState,
   mcpToolDefinitions,
-  handleMcpMessage
+  handleMcpMessage,
+  getFivetranMcpEvidence
 } = require("../server.js");
+
+test("fivetran mcp evidence is skipped cleanly when disabled", async () => {
+  const evidence = await getFivetranMcpEvidence();
+  assert.equal(evidence.source, "fivetran_mcp_disabled");
+});
 
 test("mcpToolDefinitions exposes proposeTrustGateAction with an input schema", () => {
   const tools = mcpToolDefinitions();

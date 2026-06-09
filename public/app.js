@@ -136,6 +136,14 @@
             <${Kv} k="freshness" v=${freshnessLabel(ev.bigquery)} tone=${ev.bigquery.freshness_simulated ? "warnv" : ""} />
             <${Kv} k="columns" v=${summarizeColumns(ev.bigquery.available_columns)} />
           <//>
+          ${ev.fivetran_mcp ? html`
+          <${Card} title="Fivetran MCP (partner server)">
+            <${Kv} k="source" v=${ev.fivetran_mcp.source} mono=${true} tone=${ev.fivetran_mcp.source === "fivetran_mcp_live" ? "good" : ""} />
+            <${Kv} k="server" v=${ev.fivetran_mcp.server || "github.com/fivetran/fivetran-mcp"} />
+            <${Kv} k="tools" v=${(ev.fivetran_mcp.tools || [ev.fivetran_mcp.tool]).filter(Boolean).join(", ") || "-"} mono=${true} />
+            <${Kv} k="connection seen" v=${ev.fivetran_mcp.source === "fivetran_mcp_live" ? String(!!ev.fivetran_mcp.target_connection_present) : "-"} tone=${ev.fivetran_mcp.target_connection_present ? "good" : ""} />
+            <${Kv} k="details verified" v=${ev.fivetran_mcp.details_verified === undefined ? "-" : String(!!ev.fivetran_mcp.details_verified)} tone=${ev.fivetran_mcp.details_verified ? "good" : ""} />
+          <//>` : null}
           <${Card} title="Contract diff">
             <${Kv} k="allowed tiers" v=${(ev.contract.allowed_customer_tiers || []).join(", ")} />
             <${Kv} k="observed" v=${ev.contract.observed_customer_tier} mono=${true} tone=${(ev.contract.allowed_customer_tiers || []).includes(ev.contract.observed_customer_tier) ? "good" : "warnv"} />
@@ -212,6 +220,7 @@
 
     const ftSource = selected && selected.evidence.fivetran.source;
     const bqSource = selected && selected.evidence.bigquery.source;
+    const mcpLive = Boolean(selected && selected.evidence.fivetran_mcp && selected.evidence.fivetran_mcp.source === "fivetran_mcp_live");
     const approvalActive = Boolean(activeApproval || (state && state.activeApproval));
 
     async function refresh() {
@@ -331,7 +340,8 @@
           </div>
           <div className="status-strip">
             <${Pill}>${agentRun ? agentRun.model : "gemini-3.5-flash"}<//>
-            <${Pill} live=${isLive(ftSource)}>Fivetran ${selected ? (isLive(ftSource) ? "live" : ftSource) : "ready"}<//>
+            <${Pill} live=${isLive(ftSource)}>Fivetran REST ${selected ? (isLive(ftSource) ? "live" : ftSource) : "ready"}<//>
+            <${Pill} live=${mcpLive}>Fivetran MCP ${selected ? (mcpLive ? "live" : "-") : "ready"}<//>
             <${Pill} live=${isLive(bqSource)}>BigQuery ${selected ? (isLive(bqSource) ? "live" : bqSource) : "ready"}<//>
             <${Pill}>Policy deterministic<//>
             <${Pill} warn=${approvalActive}>${approvalActive ? "Scoped approval active" : "No scoped approval"}<//>
@@ -360,9 +370,9 @@
               ${busy ? html`<div className="busy-tag"><span className="spinner"></span> Evaluating policy…</div>` : null}
               ${error ? html`<div className="error-banner">${error}</div>` : null}
               <div className="legend">
-                <div className="legend-row"><span className="dot allow"></span> ALLOW — data is trusted, action proceeds</div>
-                <div className="legend-row"><span className="dot approval"></span> APPROVAL_REQUIRED — routed to a human</div>
-                <div className="legend-row"><span className="dot block"></span> BLOCK — broken supply chain, action stopped</div>
+                <div className="legend-row"><span className="dot allow"></span> ALLOW - data is trusted, action proceeds</div>
+                <div className="legend-row"><span className="dot approval"></span> APPROVAL_REQUIRED - routed to a human</div>
+                <div className="legend-row"><span className="dot block"></span> BLOCK - broken supply chain, action stopped</div>
               </div>
             </div>
           </aside>
