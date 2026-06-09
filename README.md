@@ -42,7 +42,7 @@ flowchart TD
     POLICY --> ALLOW
     POLICY --> APPROVE
     POLICY --> BLOCK
-    POLICY -.->|"signed receipt"| AGENT
+    POLICY -.->|"auditable receipt"| AGENT
 ```
 
 The Gemini agent only calls TrustGate's own `/mcp` surface. TrustGate's backend is what calls the official Fivetran MCP server, Fivetran REST, and the Fivetran-synced BigQuery row, then a deterministic policy returns the decision.
