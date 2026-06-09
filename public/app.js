@@ -1,6 +1,8 @@
 (function () {
   const { useEffect, useMemo, useState } = React;
   const html = htm.bind(React.createElement);
+  const DEFAULT_CUSTOMER_TIER = "premium";
+  const ENUM_DRIFT_CUSTOMER_TIER = "retention_experiment";
 
   async function api(path, options) {
     const response = await fetch(path, {
@@ -212,6 +214,7 @@
     const [busy, setBusy] = useState(false);
     const [error, setError] = useState("");
     const [devView, setDevView] = useState(false);
+    const [scenarioCustomerTier, setScenarioCustomerTier] = useState("");
 
     const selected = useMemo(
       () => decisions.find((item) => item.decision_id === selectedId) || decisions[0],
@@ -222,6 +225,8 @@
     const bqSource = selected && selected.evidence.bigquery.source;
     const mcpLive = Boolean(selected && selected.evidence.fivetran_mcp && selected.evidence.fivetran_mcp.source === "fivetran_mcp_live");
     const approvalActive = Boolean(activeApproval || (state && state.activeApproval));
+    const activeCustomerTier = scenarioCustomerTier ||
+      (state && state.customerTier && state.customerTier !== DEFAULT_CUSTOMER_TIER ? state.customerTier : "");
 
     async function refresh() {
       const [decisionPayload, statePayload] = await Promise.all([
@@ -250,7 +255,7 @@
             customer_id: "C-1042",
             amount: Number(body.amount || amount),
             reason: label,
-            customer_tier: body.customer_tier,
+            customer_tier: body.customer_tier || activeCustomerTier || undefined,
             approval: activeApproval
           })
         });
@@ -275,7 +280,7 @@
             customer_id: "C-1042",
             amount: Number(body.amount || amount),
             reason: label,
-            customer_tier: body.customer_tier,
+            customer_tier: body.customer_tier || activeCustomerTier || undefined,
             approval: activeApproval
           })
         });
@@ -294,13 +299,21 @@
       setError("");
       try {
         await api(path, { method: "POST", body: "{}" });
-        if (path.includes("/api/demo/reset")) setActiveApproval(null);
+        if (path.includes("/api/demo/reset")) {
+          setActiveApproval(null);
+          setScenarioCustomerTier("");
+        }
         await refresh();
       } catch (err) {
         setError(err.message);
       } finally {
         setBusy(false);
       }
+    }
+
+    async function simulateEnumDrift() {
+      setScenarioCustomerTier(ENUM_DRIFT_CUSTOMER_TIER);
+      await mutate("/api/demo/inject-enum-drift");
     }
 
     async function approve(decision) {
@@ -362,11 +375,12 @@
               </div>
               <div className="group-label">Simulate data-supply-chain events</div>
               <div className="button-grid">
-                <button className="warn" disabled=${busy} onClick=${() => mutate("/api/demo/inject-enum-drift")}>Simulate new customer tier</button>
+                <button className="warn" disabled=${busy} onClick=${simulateEnumDrift}>Simulate new customer tier</button>
                 <button disabled=${busy} onClick=${() => mutate("/api/demo/inject-stale-sync")}>Simulate stale sync</button>
                 <button className="danger" disabled=${busy} onClick=${() => mutate("/api/demo/inject-critical-failure")}>Simulate schema failure</button>
                 <button disabled=${busy} onClick=${() => mutate("/api/demo/reset")}>Reset demo</button>
               </div>
+              ${activeCustomerTier ? html`<div className="scenario-tag">Next action tier: <span className="mono">${activeCustomerTier}</span></div>` : null}
               ${busy ? html`<div className="busy-tag"><span className="spinner"></span> Evaluating policy…</div>` : null}
               ${error ? html`<div className="error-banner">${error}</div>` : null}
               <div className="legend">

@@ -323,6 +323,19 @@ button.tiny {
   margin: 6px 0 2px;
 }
 
+.scenario-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  width: fit-content;
+  border: 1px solid var(--approval-line);
+  border-radius: var(--radius-sm);
+  background: var(--approval-bg);
+  color: var(--ink);
+  padding: 7px 9px;
+  font-size: 12.5px;
+}
+
 .legend {
   display: grid;
   gap: 8px;
