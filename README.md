@@ -16,6 +16,37 @@ Gemini / Vertex AI function call
 -> receipt returned to the agent
 ```
 
+## Architecture
+
+```mermaid
+flowchart TD
+    subgraph SC["Data supply chain (Fivetran-synced)"]
+        direction LR
+        GS["Google Sheets"] -->|"Fivetran connection: fulfill_pageant"| BQT[("BigQuery table<br/>trustgate_demo.customers")]
+    end
+
+    AGENT["Customer Recovery Agent<br/>Gemini in Agent Builder"]
+    TG["TrustGate backend<br/>Cloud Run"]
+    FMCP["Official Fivetran MCP server<br/>over stdio"]
+    FREST["Fivetran REST API"]
+    POLICY{"Deterministic policy engine<br/>risk_score = sum of rule weights, no ML"}
+    ALLOW(["ALLOW"])
+    APPROVE(["APPROVAL_REQUIRED"])
+    BLOCK(["BLOCK"])
+
+    AGENT -->|"calls /mcp (proposeTrustGateAction)"| TG
+    TG -->|"Fivetran evidence"| FMCP
+    TG -->|"Fivetran evidence (stable path)"| FREST
+    TG -->|"reads live row"| BQT
+    TG --> POLICY
+    POLICY --> ALLOW
+    POLICY --> APPROVE
+    POLICY --> BLOCK
+    POLICY -.->|"signed receipt"| AGENT
+```
+
+The Gemini agent only calls TrustGate's own `/mcp` surface. TrustGate's backend is what calls the official Fivetran MCP server, Fivetran REST, and the Fivetran-synced BigQuery row, then a deterministic policy returns the decision.
+
 ## Current Proof
 
 - Hosted app/API: `https://trustgate-24801890031.us-central1.run.app`
