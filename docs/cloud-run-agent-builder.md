@@ -1,6 +1,6 @@
 # Cloud Run + Gemini tool setup
 
-This file records the Cloud Run deployment path and the agent-tool paths I tried. The deployed API works. The agent call that worked for me is the Vertex AI function-calling bridge, documented in `docs/vertex-agent-function-calling.md`.
+This file records the Cloud Run deployment path and the agent-tool paths I tried. The deployed API works. The video proof should show the Agent Designer MCP Server path to TrustGate's `/mcp` endpoint. The hosted Vertex AI function-calling route remains a dashboard/backup proof path, documented in `docs/vertex-agent-function-calling.md`.
 
 ## Current known values
 
@@ -26,7 +26,9 @@ POST /api/agent/run -> Gemini requests proposeTrustGateAction, then explains the
 
 ## What still has to be true for submission
 
-The hosted Cloud Run URL must be called by a Gemini/Agent Platform agent tool. For the current working demo, that is done by the Vertex AI Python SDK function-calling bridge.
+The hosted Cloud Run URL must be called by a Gemini/Agent Platform agent tool. For the submission video, show Vertex AI Agent Designer calling TrustGate through `Add tools -> MCP Server` and the hosted `/mcp` endpoint.
+
+The hosted `/api/agent/run` route is still useful as a backup/dashboard proof: it calls Vertex AI Gemini, gives Gemini the `proposeTrustGateAction` function declaration, evaluates the action inside TrustGate, and returns Gemini's final explanation.
 
 If the UI surface exposes OpenAPI import later, keep it to one operation:
 
@@ -83,12 +85,12 @@ https://trustgate-24801890031.us-central1.run.app
 Test:
 
 ```bash
-curl https://YOUR_CLOUD_RUN_URL/health
-curl https://YOUR_CLOUD_RUN_URL/api/fivetran/evidence
-curl -X POST https://YOUR_CLOUD_RUN_URL/api/agent/run \
+curl https://trustgate-24801890031.us-central1.run.app/health
+curl https://trustgate-24801890031.us-central1.run.app/api/fivetran/evidence
+curl -X POST https://trustgate-24801890031.us-central1.run.app/api/agent/run \
   -H "Content-Type: application/json" \
   -d '{"agent_id":"customer_recovery_agent","action_type":"approve_refund","customer_id":"C-1042","amount":75,"reason":"late_delivery"}'
-curl -X POST https://YOUR_CLOUD_RUN_URL/api/actions/propose \
+curl -X POST https://trustgate-24801890031.us-central1.run.app/api/actions/propose \
   -H "Content-Type: application/json" \
   -d '{"agent_id":"customer_recovery_agent","action_type":"approve_refund","customer_id":"C-1042","amount":75,"reason":"late_delivery"}'
 ```
@@ -111,7 +113,7 @@ Required proof:
 
 Observed UI limitation:
 
-In the Agent Builder / Agent Studio UI I had access to, the Tools section showed Google Search, URL Context, and MCP Server, but no visible OpenAPI import path. The fallback that worked was the Vertex AI Python SDK function-calling bridge documented in:
+In the Agent Builder / Agent Studio UI I had access to, the Tools section showed Google Search, URL Context, and MCP Server, but no visible OpenAPI import path. The MCP Server option is the preferred submission path. The Vertex AI Python SDK function-calling bridge is documented as a backup here:
 
 ```text
 docs/vertex-agent-function-calling.md

@@ -1,6 +1,6 @@
 # Vertex AI function-calling bridge
 
-This is the path I used when the Agent Builder / Agent Studio UI did not expose an OpenAPI tool import.
+This is the backup/dashboard proof path I used when the Agent Builder / Agent Studio UI did not expose an OpenAPI tool import. For the submission video, the preferred Agent Builder proof is Agent Designer calling TrustGate's hosted `/mcp` endpoint through `Add tools -> MCP Server`.
 
 ## What happened
 

@@ -35,7 +35,7 @@ The policy engine decides. Gemini explains the receipt.
 
 1. Agent Builder / Agent Studio UI did not show an OpenAPI import path in the Tools panel I had access to.
 
-   I saw Google Search, URL Context, and MCP Server. I did not see a `Create Tool` or OpenAPI import button. I switched to the Vertex AI Python SDK and represented TrustGate as a Gemini function tool.
+   I saw Google Search, URL Context, and MCP Server. I did not see a `Create Tool` or OpenAPI import button. I first switched to the Vertex AI Python SDK and represented TrustGate as a Gemini function tool, then added TrustGate's own `/mcp` endpoint so Agent Designer can connect through `Add tools -> MCP Server`.
 
 2. The current hosted route uses `gemini-3.5-flash`.
 
