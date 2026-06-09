@@ -53,6 +53,10 @@ The policy engine decides. Gemini explains the receipt.
 
    A live Cloud Run test returned `decision_not_found` because the approval request can hit a different instance than the request that created the decision. I changed the approval flow so the approval receipt can be carried into the next action call. That keeps the demo honest about Cloud Run being stateless.
 
+6. Wiring in the official Fivetran MCP server took a few tries.
+
+   It is a Python stdio server, so the Node backend spawns it and speaks newline-delimited JSON-RPC. Three things bit me: its tools require a `schema_file` argument pointing at the bundled OpenAPI definition, the entry point is `python server.py` (not a console script), and the schema paths only resolve when the process runs from the server's own directory. After fixing the spawn working directory, `/api/fivetran/mcp-evidence` returns `fivetran_mcp_live` and the receipt carries both `fivetran_rest_live` and `fivetran_mcp_live`.
+
 ## Current Working Evidence
 
 Hosted Cloud Run URL:
@@ -112,6 +116,6 @@ Gemini Final Answer -> cites the TrustGate receipt instead of inventing a decisi
 
 I am not claiming the demo detects invisible semantic changes. The demo only reacts to observable contract signals: a new enum value, schema/config change, stale sync signal, or critical connector/schema failure.
 
-I am not claiming the working path is Fivetran MCP if the receipt says REST. Fivetran's hackathon resource page lists REST API as an integration option, but the Devpost pitch still needs to be honest about which path is shown.
+I am not claiming the Gemini agent calls Fivetran's MCP directly. The agent calls TrustGate's own `/mcp` tool; TrustGate's backend calls the official Fivetran MCP server separately over stdio and still keeps Fivetran REST as the stable evidence path.
 
 I am not claiming production readiness. This is a working hackathon prototype with a narrow refund scenario.

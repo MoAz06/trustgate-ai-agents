@@ -23,7 +23,8 @@ Gemini / Vertex AI function call
 - Action endpoint: `POST /api/actions/propose`
 - MCP tool endpoint for Agent Builder `Add tools -> MCP Server`: `POST /mcp` (TrustGate's own MCP surface, not Fivetran's MCP)
 - OpenAPI spec for tool imports when available: `/openapi.json`
-- Live Fivetran evidence observed in receipts: `source=fivetran_rest_live`
+- Live Fivetran REST evidence observed in receipts: `source=fivetran_rest_live`
+- Live Fivetran MCP evidence (official Fivetran MCP server at runtime): `source=fivetran_mcp_live` via `/api/fivetran/mcp-evidence`
 - Live BigQuery evidence observed in hosted receipts: `source=bigquery_rest_live`
 - Fivetran connection used in the demo: `fulfill_pageant`
 - Working Gemini paths: hosted `/api/agent/run` and `scripts/vertex_trustgate_agent_demo.py`
@@ -79,7 +80,7 @@ curl http://localhost:8080/readyz
 
 ## Fivetran Evidence
 
-For the Fivetran track, I used the REST API option listed in the hackathon Fivetran resources: `https://rapid-agent.devpost.com/details/fivetran-resources`.
+For the Fivetran track, TrustGate now uses both integration paths listed in the hackathon Fivetran resources: the Fivetran REST API and the official open-source Fivetran MCP server. REST is the stable evidence path, and the MCP server is an additional live partner-evidence path shown in `evidence.fivetran_mcp`.
 
 Create `.env` from `.env.example` and add a scoped Fivetran API key:
 
@@ -104,6 +105,24 @@ curl http://localhost:8080/api/fivetran/evidence
 ```
 
 The important proof is the real Fivetran field inside the action receipt.
+
+## Fivetran MCP
+
+TrustGate also calls the official Fivetran MCP server (`github.com/fivetran/fivetran-mcp`) at runtime. The Cloud Run container installs that server, and the TrustGate backend spawns it over stdio and calls `list_connections` and `get_connection_details` to gather Fivetran evidence. Each action receipt includes an `evidence.fivetran_mcp` block, and there is a dedicated endpoint:
+
+```bash
+curl https://trustgate-24801890031.us-central1.run.app/api/fivetran/mcp-evidence
+```
+
+A healthy response shows `source: fivetran_mcp_live`, `details_verified: true`, and `target_connection_present: true` for `fulfill_pageant`.
+
+To be precise about the architecture:
+
+- The Gemini agent (Agent Builder) calls TrustGate's own agent-facing MCP endpoint, `/mcp` (`proposeTrustGateAction`).
+- TrustGate's backend then calls the official Fivetran MCP server over stdio for Fivetran evidence.
+- Fivetran REST remains the stable evidence path, so a decision still works if the MCP process is unavailable.
+
+So TrustGate uses Fivetran REST and the official Fivetran MCP server at runtime. The MCP integration can be turned off with `FIVETRAN_MCP_DISABLED=1`, in which case TrustGate falls back to REST only.
 
 ## BigQuery Evidence
 
@@ -139,7 +158,7 @@ POST /mcp
 
 This endpoint speaks the MCP streamable-HTTP JSON-RPC protocol and exposes one tool, `proposeTrustGateAction`. In Agent Designer I add it with `Add tools -> MCP Server` and the endpoint URL, and the agent discovers the tool automatically.
 
-To be precise about what this is: `/mcp` is TrustGate's own MCP tool surface for agents. It is not Fivetran's MCP server. The Fivetran evidence path inside TrustGate uses the Fivetran REST API, which the hackathon Fivetran resource page lists as an integration option.
+To be precise about what this is: `/mcp` is TrustGate's own MCP tool surface for agents. It is not Fivetran's MCP server. Separately, the TrustGate backend spawns the official Fivetran MCP server over stdio and adds that result to receipts as `evidence.fivetran_mcp`.
 
 The hosted app also has a visible Gemini run endpoint:
 
@@ -204,6 +223,6 @@ That is the gap between this prototype and a product I would trust in a real bus
 
 - I am not claiming this is production-ready.
 - I am not claiming TrustGate detects invisible meaning changes when schema and values are unchanged.
-- I am not claiming the live demo uses Fivetran MCP if the shown receipt says REST.
+- I am not claiming the Gemini agent calls Fivetran's MCP directly. The agent calls TrustGate's `/mcp` tool; TrustGate's backend is the one that calls the official Fivetran MCP server (alongside Fivetran REST), shown as `fivetran_mcp_live` in the receipt.
 - I am not claiming `risk_score` is ML.
 - I am not claiming the Agent Builder UI OpenAPI path worked for me unless I record that exact path.
